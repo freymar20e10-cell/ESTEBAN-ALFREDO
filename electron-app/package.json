@@ -1,0 +1,35 @@
+{
+  "name": "bt7274",
+  "version": "1.0.0",
+  "description": "BT-7274 - Asistente Personal",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "ui:install": "cd ..\\new-ui-repo && bun install",
+    "ui:dev": "cd ..\\new-ui-repo && bun run dev",
+    "ui:build": "cd ..\\new-ui-repo && bun run build && xcopy /E /Y ..\\new-ui-repo\\dist ..\\ui\\"
+  },
+  "build": {
+    "appId": "com.bt7274.assistant",
+    "productName": "BT-7274",
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "runAfterFinish": true
+    }
+  },
+  "devDependencies": {
+    "electron": "^40.9.3",
+    "electron-builder": "26.0.12"
+  },
+  "dependencies": {
+    "electron-store": "8.2.0"
+  },
+  "allowScripts": {
+    "electron@40.9.3": true
+  }
+}

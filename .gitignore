@@ -1,0 +1,6 @@
+.env
+data/
+bt7274_log.txt
+bt7274_memory.json
+__pycache__/
+*.pyc
