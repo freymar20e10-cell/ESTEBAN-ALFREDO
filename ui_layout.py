@@ -252,9 +252,8 @@ def _weather_data() -> dict:
 
 def _notes_data() -> dict:
     try:
-        from memory import _load_memory
-        memory = _load_memory()
-        notes = memory.get("notes", [])[-5:]
+        from memory import get_notes_raw
+        notes = get_notes_raw(limit=5)
         return {"ok": True, "notes": notes}
     except Exception as e:
         return {"ok": False, "notes": [], "error": str(e)}

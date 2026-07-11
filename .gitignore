@@ -4,3 +4,8 @@ bt7274_log.txt
 bt7274_memory.json
 __pycache__/
 *.pyc
+node_modules/
+electron-app/node_modules/
+new-ui-repo/
+logs/
+__pycache__/

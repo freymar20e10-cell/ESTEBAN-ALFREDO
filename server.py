@@ -62,8 +62,48 @@ from ui_layout import (
 # ═══════════════════════════════════════════
 
 conversation = []
+conversation_lock = threading.Lock()
 connected_clients = set()
 main_loop = None
+
+import concurrent.futures
+from security import set_confirmation_backend
+
+# Confirmaciones pendientes: id -> Future que se resuelve cuando el usuario responde en la UI
+_pending_confirmations: dict[str, concurrent.futures.Future] = {}
+_confirmation_counter = 0
+_confirmation_lock = threading.Lock()
+
+
+def _ask_confirmation_via_ui(description: str) -> bool:
+    """Se ejecuta en el hilo del executor (bloqueante ahí, no en el loop principal).
+    Manda la pregunta a TODOS los clientes conectados y espera hasta 60s la respuesta."""
+    global _confirmation_counter
+    if not connected_clients or main_loop is None:
+        return False  # Sin UI conectada, no hay forma segura de confirmar
+
+    with _confirmation_lock:
+        _confirmation_counter += 1
+        confirm_id = f"confirm-{_confirmation_counter}"
+
+    future = concurrent.futures.Future()
+    _pending_confirmations[confirm_id] = future
+
+    broadcast_sync({
+        "type": "confirmation_request",
+        "id": confirm_id,
+        "description": description,
+    })
+
+    try:
+        return future.result(timeout=60)  # Espera hasta 60s la respuesta del usuario
+    except concurrent.futures.TimeoutError:
+        return False
+    finally:
+        _pending_confirmations.pop(confirm_id, None)
+
+
+set_confirmation_backend(_ask_confirmation_via_ui)
 
 
 # ═══════════════════════════════════════════
@@ -214,19 +254,23 @@ def process_message(user_input: str) -> str:
     if user_input.lower().strip() in direct:
         return direct[user_input.lower().strip()]()
 
-    conversation.append({"role": "user", "content": user_input})
-    if len(conversation) > 20:
-        conversation = conversation[-20:]
+    with conversation_lock:
+        conversation.append({"role": "user", "content": user_input})
+        if len(conversation) > 20:
+            conversation = conversation[-20:]
+        snapshot = list(conversation)
 
-    response = think(conversation)
+    response = think(snapshot)
     action = try_parse_action(response)
 
     if action:
         result = execute_action(action)
-        conversation.append({"role": "assistant", "content": result})
+        with conversation_lock:
+            conversation.append({"role": "assistant", "content": result})
         return result
     else:
-        conversation.append({"role": "assistant", "content": response})
+        with conversation_lock:
+            conversation.append({"role": "assistant", "content": response})
         return response
 
 
@@ -291,6 +335,14 @@ async def handle_client(websocket):
                     "widget": widget_type,
                     "data": payload,
                 }))
+                continue
+
+            if msg_type == "confirmation_response":
+                confirm_id = data.get("id", "")
+                approved = bool(data.get("approved", False))
+                future = _pending_confirmations.get(confirm_id)
+                if future and not future.done():
+                    future.set_result(approved)
                 continue
 
             if msg_type == "message":
@@ -398,6 +450,16 @@ def start_http_server():
 async def main():
     global main_loop
     main_loop = asyncio.get_event_loop()
+
+    from config import validate_config
+    problems = validate_config()
+    if problems:
+        print("\n  ⚠️  PROBLEMAS DE CONFIGURACIÓN DETECTADOS:\n")
+        for p in problems:
+            print(f"     - {p}")
+        print("\n  Corrige tu archivo .env antes de continuar.\n")
+        print("  El servidor seguirá abierto, pero el chat con IA no funcionará")
+        print("  hasta que arregles esto.\n")
 
     print(f"""
 ================================================================================

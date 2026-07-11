@@ -136,3 +136,26 @@ LOG_FILE = PROJECT_DIR / "bt7274_log.txt"
 
 # Crear directorio de datos si no existe
 DATA_DIR.mkdir(exist_ok=True)
+
+# ═══════════════════════════════════════════
+# VALIDACIÓN AL ARRANCAR
+# ═══════════════════════════════════════════
+
+def validate_config() -> list[str]:
+    """Devuelve una lista de problemas de configuración. Vacía si todo bien."""
+    problems = []
+
+    if AI_PROVIDER == "gemini" and not GEMINI_API_KEY:
+        problems.append(
+            "Falta GEMINI_API_KEY en tu .env (AI_PROVIDER está en 'gemini')."
+        )
+    elif AI_PROVIDER == "openrouter" and not OPENROUTER_API_KEY:
+        problems.append(
+            "Falta OPENROUTER_API_KEY en tu .env (AI_PROVIDER está en 'openrouter')."
+        )
+    elif AI_PROVIDER not in ("gemini", "openrouter"):
+        problems.append(
+            f"AI_PROVIDER='{AI_PROVIDER}' no es válido. Usa 'gemini' u 'openrouter'."
+        )
+
+    return problems

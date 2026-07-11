@@ -171,21 +171,33 @@ def play_spotify_search(query: str) -> str:
 
 
 def get_system_info() -> str:
-    """Obtiene información básica del sistema."""
+    """Obtiene información básica del sistema (sin depender de wmic)."""
+    import shutil
+    import string
+
     info = []
     info.append(f"💻 Usuario: {os.getlogin()}")
     info.append(f"📁 Directorio actual: {os.getcwd()}")
     info.append(f"🖥️ Sistema: {os.name}")
 
-    # Espacio en disco
-    try:
-        result = subprocess.run(
-            'wmic logicaldisk get size,freespace,caption',
-            shell=True, capture_output=True, text=True, timeout=10
-        )
-        if result.stdout.strip():
-            info.append(f"💾 Discos:\n{result.stdout.strip()}")
-    except Exception:
-        pass
+    # Espacio en disco — usa shutil (multiplataforma, no depende de wmic)
+    disk_lines = []
+    if os.name == "nt":
+        drives = [f"{letter}:\\" for letter in string.ascii_uppercase
+                  if os.path.exists(f"{letter}:\\")]
+    else:
+        drives = ["/"]
+
+    for drive in drives:
+        try:
+            usage = shutil.disk_usage(drive)
+            free_gb = usage.free / (1024 ** 3)
+            total_gb = usage.total / (1024 ** 3)
+            disk_lines.append(f"   {drive} — {free_gb:.1f} GB libres de {total_gb:.1f} GB")
+        except Exception:
+            continue
+
+    if disk_lines:
+        info.append("💾 Discos:\n" + "\n".join(disk_lines))
 
     return "\n".join(info)

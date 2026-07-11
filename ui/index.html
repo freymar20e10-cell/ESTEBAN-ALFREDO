@@ -595,6 +595,13 @@ function connectWS() {
       else if (data.state === 'processing') setState('pensando');
     } else if (data.type === 'layout_update') {
       // widget layout not needed for this UI version
+    } else if (data.type === 'confirmation_request') {
+      const ok = window.confirm(`BT-7274 pide confirmación:\n\n${data.description}`);
+      ws.send(JSON.stringify({
+        type: 'confirmation_response',
+        id: data.id,
+        approved: ok,
+      }));
     }
   };
   ws.onclose = () => { setTimeout(connectWS, 3000); };
