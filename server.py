@@ -30,7 +30,10 @@ from config import (
     ASSISTANT_NAME, USER_NAME, HTTP_HOST, HTTP_PORT,
     WEBSOCKET_PORT, MAX_MESSAGE_CHARS, MAX_CONVERSATION_MESSAGES,
 )
-from brain import think, analyze_screen_with_ai, synthesize_answer, INFO_ACTIONS
+from brain import (
+    think, analyze_screen_with_ai, synthesize_answer, INFO_ACTIONS,
+    think_step, synthesize_plan_summary,
+)
 from actions import open_app, close_app, run_command, play_youtube, play_spotify_search, get_system_info, log_action
 from logger import log_error
 from file_manager import (
@@ -307,6 +310,69 @@ def _ui_action(fn):
     return result
 
 
+def try_parse_plan(response: str) -> list[str] | None:
+    """Detecta si la IA respondió con un plan de varios pasos en vez de una acción."""
+    response = response.strip()
+    if response.startswith("```"):
+        lines = [l for l in response.split("\n") if not l.strip().startswith("```")]
+        response = "\n".join(lines).strip()
+    try:
+        data = json.loads(response)
+        if isinstance(data, dict) and "plan" in data and isinstance(data["plan"], list):
+            steps = [str(s).strip() for s in data["plan"] if str(s).strip()]
+            if steps:
+                return steps[:8]  # límite duro de 8 pasos por plan
+    except (json.JSONDecodeError, ValueError):
+        pass
+    return None
+
+
+MAX_PLAN_STEP_RETRIES = 1
+
+
+def execute_plan(steps: list[str], user_input: str) -> str:
+    """
+    Ejecuta un plan de varios pasos: piensa -> actúa -> verifica por cada
+    paso, con un reintento simple si un paso falla, transmitiendo el
+    progreso a la UI en tiempo real.
+    """
+    results: list[str] = []
+
+    broadcast_sync({"type": "plan_start", "steps": steps, "total": len(steps)})
+
+    for i, step in enumerate(steps):
+        broadcast_sync({
+            "type": "plan_step", "index": i, "total": len(steps),
+            "description": step, "status": "running",
+        })
+
+        step_result = None
+        for attempt in range(MAX_PLAN_STEP_RETRIES + 1):
+            try:
+                step_response = think_step(step, results, user_input)
+                step_action = try_parse_action(step_response)
+                if step_action:
+                    step_result = execute_action(step_action)
+                else:
+                    step_result = step_response  # el paso era razonamiento, no una acción
+
+                if not step_result.startswith(("❌", "⚠️")):
+                    break
+            except Exception as e:
+                step_result = f"❌ Error inesperado en el paso: {e}"
+
+        results.append(step_result or "❌ No se pudo completar el paso.")
+
+        broadcast_sync({
+            "type": "plan_step", "index": i, "total": len(steps),
+            "description": step, "status": "done", "result": results[-1],
+        })
+
+    broadcast_sync({"type": "plan_end"})
+
+    return synthesize_plan_summary(user_input, steps, results)
+
+
 def process_message(user_input: str) -> str:
     global conversation
 
@@ -334,6 +400,14 @@ def process_message(user_input: str) -> str:
         snapshot = list(conversation)
 
     response = think(snapshot)
+
+    plan = try_parse_plan(response)
+    if plan:
+        final_response = execute_plan(plan, user_input)
+        with conversation_lock:
+            conversation.append({"role": "assistant", "content": final_response})
+        return final_response
+
     action = try_parse_action(response)
 
     if action:

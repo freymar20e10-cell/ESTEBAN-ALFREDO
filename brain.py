@@ -52,6 +52,18 @@ REGLAS:
 - Si el usuario no dice una ruta específica, asume su escritorio o descargas
 
 FORMATO DE RESPUESTA:
+Si la tarea del usuario necesita VARIOS pasos independientes para completarse
+(ejemplo: "organiza mis descargas y dime qué encontraste", "busca información
+sobre X y guárdala como nota", "revisa mi pantalla y si hay un error, avísame
+y busca la solución"), responde SOLO con un plan, en este formato exacto y
+nada más:
+{{"plan": ["paso 1 en lenguaje natural y específico", "paso 2 en lenguaje natural y específico"]}}
+
+Usa un plan SOLO cuando de verdad haya más de un paso claramente separable.
+Para peticiones de un solo paso, NO uses plan — responde con la acción normal
+o en texto. Máximo 8 pasos por plan. Cada paso debe ser una instrucción clara
+y ejecutable por sí sola, no una descripción vaga.
+
 Si necesitas que el sistema ejecute una acción, responde en JSON con este formato:
 {{"action": "tipo_accion", "params": {{"param1": "valor"}}}}
 
@@ -409,3 +421,65 @@ def synthesize_answer(user_question: str, raw_data: str) -> str:
         pass
 
     return raw_data  # si la síntesis falla, mostrar el dato crudo es mejor que no responder nada
+
+
+def think_step(step_description: str, previous_results: list[str], original_request: str) -> str:
+    """
+    Decide la acción JSON (o responde en texto) para UN paso específico de un
+    plan, con el contexto de lo que ya se hizo antes en ese mismo plan.
+    """
+    context = ""
+    if previous_results:
+        context = "\n\nResultados de pasos anteriores en este plan:\n" + "\n".join(
+            f"- {r}" for r in previous_results
+        )
+
+    step_prompt = (
+        f"Estás ejecutando un plan de varios pasos para cumplir esta petición "
+        f"original del usuario: \"{original_request}\"\n\n"
+        f"Paso actual a ejecutar: {step_description}"
+        f"{context}\n\n"
+        "Responde con la acción JSON necesaria para completar ESTE paso "
+        "(formato {\"action\": ..., \"params\": {...}}), o si el paso no "
+        "requiere ejecutar nada del sistema (por ejemplo, es solo razonar o "
+        "resumir algo ya obtenido), responde en texto plano explicando el "
+        "resultado de ese razonamiento."
+    )
+    messages = [{"role": "user", "content": step_prompt}]
+
+    try:
+        if AI_PROVIDER == "gemini":
+            return _call_gemini(messages, SYSTEM_PROMPT)
+        elif AI_PROVIDER == "openrouter":
+            return _call_openrouter(messages, SYSTEM_PROMPT)
+    except Exception as e:
+        return f"❌ Error pensando el paso: {e}"
+
+    return "❌ Proveedor de IA no soportado."
+
+
+def synthesize_plan_summary(original_request: str, steps: list[str], results: list[str]) -> str:
+    """Resume en lenguaje natural cómo salió un plan de varios pasos."""
+    steps_summary = "\n".join(
+        f"{i + 1}. {step} → {result}"
+        for i, (step, result) in enumerate(zip(steps, results))
+    )
+    prompt = (
+        f"El usuario pidió: \"{original_request}\"\n\n"
+        f"Se ejecutó este plan de varios pasos:\n{steps_summary}\n\n"
+        "Resume en 2-4 frases, en español, de forma natural, cómo salió todo. "
+        "Si algún paso falló, dilo con honestidad y sugiere qué hacer. No "
+        "repitas el listado completo tal cual, sintetiza el resultado final "
+        "para el usuario como si le estuvieras contando lo que hiciste."
+    )
+    messages = [{"role": "user", "content": prompt}]
+    plain_system = "Responde solo con el resumen final en texto natural, sin JSON, sin listas numeradas."
+    try:
+        if AI_PROVIDER == "gemini":
+            return _call_gemini(messages, plain_system)
+        elif AI_PROVIDER == "openrouter":
+            return _call_openrouter(messages, plain_system)
+    except Exception:
+        pass
+
+    return "Plan completado:\n" + steps_summary

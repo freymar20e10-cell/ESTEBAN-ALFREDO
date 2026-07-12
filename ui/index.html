@@ -604,6 +604,14 @@ function connectWS() {
       else if (data.state === 'processing') setState('pensando');
     } else if (data.type === 'layout_update') {
       // widget layout not needed for this UI version
+    } else if (data.type === 'plan_start') {
+      addMessage('jarvis', `🗂️ Voy a hacer esto en ${data.total} pasos...`);
+    } else if (data.type === 'plan_step') {
+      const paso = `Paso ${data.index + 1}/${data.total}: ${data.description}`;
+      document.getElementById('status-text').textContent =
+        data.status === 'running' ? `⚙️ ${paso}` : `✅ ${paso}`;
+    } else if (data.type === 'plan_end') {
+      setState('pensando');
     } else if (data.type === 'confirmation_request') {
       const ok = window.confirm(`BT-7274 pide confirmación:\n\n${data.description}`);
       ws.send(JSON.stringify({
