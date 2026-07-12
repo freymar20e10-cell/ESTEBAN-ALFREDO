@@ -369,3 +369,43 @@ def analyze_screen_with_ai(question: str = "") -> str:
         return f"❌ Error de conexión: {e.reason}"
     except Exception as e:
         return f"❌ Error inesperado analizando pantalla: {e}"
+
+
+INFO_ACTIONS = {
+    "get_memory", "get_notes", "get_projects", "get_weather", "web_search",
+    "get_news", "get_definition", "get_tasks", "get_events_today",
+    "get_events_date", "get_events_week", "get_reminders", "daily_summary",
+    "list_files", "search_files", "read_file", "system_info", "get_datetime",
+    "spotify_now_playing", "browser_read_page", "list_windows",
+}
+
+
+def synthesize_answer(user_question: str, raw_data: str) -> str:
+    """
+    Convierte el resultado crudo de una acción informativa (memoria, clima,
+    notas, etc.) en una respuesta natural y directa a la pregunta del
+    usuario, en vez de mostrar el dump completo sin contexto.
+    """
+    synth_prompt = (
+        "Eres un asistente que acaba de consultar información para responder "
+        "una pregunta de su usuario. Responde de forma natural, breve y "
+        "directa, en español, usando SOLO la información relevante para lo "
+        "que se preguntó. Si la información consultada no contiene lo que "
+        "el usuario pidió, dilo claramente y, si tiene sentido, pregunta si "
+        "quiere que lo guardes. No repitas datos que no vienen al caso. "
+        "No devuelvas JSON, solo la respuesta en texto plano.\n\n"
+        f"Pregunta del usuario: {user_question}\n\n"
+        f"Información consultada:\n{raw_data}"
+    )
+    messages = [{"role": "user", "content": synth_prompt}]
+    plain_system = "Responde solo con la respuesta final en texto natural, sin JSON, sin explicaciones extra sobre lo que hiciste."
+
+    try:
+        if AI_PROVIDER == "gemini":
+            return _call_gemini(messages, plain_system)
+        elif AI_PROVIDER == "openrouter":
+            return _call_openrouter(messages, plain_system)
+    except Exception:
+        pass
+
+    return raw_data  # si la síntesis falla, mostrar el dato crudo es mejor que no responder nada

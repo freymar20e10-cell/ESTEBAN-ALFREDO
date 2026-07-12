@@ -30,7 +30,7 @@ from config import (
     ASSISTANT_NAME, USER_NAME, HTTP_HOST, HTTP_PORT,
     WEBSOCKET_PORT, MAX_MESSAGE_CHARS, MAX_CONVERSATION_MESSAGES,
 )
-from brain import think, analyze_screen_with_ai
+from brain import think, analyze_screen_with_ai, synthesize_answer, INFO_ACTIONS
 from actions import open_app, close_app, run_command, play_youtube, play_spotify_search, get_system_info, log_action
 from logger import log_error
 from file_manager import (
@@ -338,9 +338,16 @@ def process_message(user_input: str) -> str:
 
     if action:
         result = execute_action(action)
+
+        action_name = action.get("action", "")
+        if action_name in INFO_ACTIONS:
+            final_response = synthesize_answer(user_input, result)
+        else:
+            final_response = result
+
         with conversation_lock:
-            conversation.append({"role": "assistant", "content": result})
-        return result
+            conversation.append({"role": "assistant", "content": final_response})
+        return final_response
     else:
         with conversation_lock:
             conversation.append({"role": "assistant", "content": response})
