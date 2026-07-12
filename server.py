@@ -27,7 +27,7 @@ def safe_print(text):
 sys.path.insert(0, str(Path(__file__).parent))
 
 from config import ASSISTANT_NAME, USER_NAME
-from brain import think
+from brain import think, analyze_screen_with_ai
 from actions import open_app, close_app, run_command, play_youtube, play_spotify_search, get_system_info, log_action
 from file_manager import (
     list_files, create_folder, create_file, read_file,
@@ -51,6 +51,17 @@ from spotify_control import (
 )
 from voice import speak
 from voice_live import start_voice_chat, stop_voice_chat, is_voice_active
+from computer_control import (
+    mouse_click, mouse_double_click, mouse_right_click, mouse_move, mouse_scroll,
+    type_text, press_key, hotkey,
+    focus_window, minimize_window, maximize_window, list_windows,
+    copy_selection, paste_text, select_all, undo,
+)
+from browser_control import (
+    browser_search, browser_go_to, browser_click, browser_type,
+    browser_type_and_enter, browser_read_page, browser_back,
+    browser_new_tab, browser_close_tab, browser_scroll, close_browser,
+)
 from ui_layout import (
     get_layout, add_widget, remove_widget, move_widget,
     resize_widget, set_theme, reset_layout, get_widget_data,
@@ -168,6 +179,37 @@ def execute_action(action_data: dict) -> str:
         "spotify_now_playing": lambda: spotify_now_playing(),
         "spotify_shuffle": lambda: spotify_shuffle(params.get("state", True)),
         "spotify_repeat": lambda: spotify_repeat(params.get("state", "off")),
+        # Control de mouse/teclado/ventanas
+        "mouse_click": lambda: mouse_click(int(params.get("x", 0)), int(params.get("y", 0))),
+        "mouse_double_click": lambda: mouse_double_click(int(params.get("x", 0)), int(params.get("y", 0))),
+        "mouse_right_click": lambda: mouse_right_click(int(params.get("x", 0)), int(params.get("y", 0))),
+        "mouse_move": lambda: mouse_move(int(params.get("x", 0)), int(params.get("y", 0))),
+        "mouse_scroll": lambda: mouse_scroll(int(params.get("clicks", -3))),
+        "type_text": lambda: type_text(params.get("text", "")),
+        "press_key": lambda: press_key(params.get("key", "")),
+        "hotkey": lambda: hotkey(*params.get("keys", [])),
+        "focus_window": lambda: focus_window(params.get("title", "")),
+        "minimize_window": lambda: minimize_window(params.get("title", "")),
+        "maximize_window": lambda: maximize_window(params.get("title", "")),
+        "list_windows": lambda: list_windows(),
+        "copy_selection": lambda: copy_selection(),
+        "paste_text": lambda: paste_text(),
+        "select_all": lambda: select_all(),
+        "undo": lambda: undo(),
+        # Control de navegador (Selenium)
+        "browser_search": lambda: browser_search(params.get("query", "")),
+        "browser_go_to": lambda: browser_go_to(params.get("url", "")),
+        "browser_click": lambda: browser_click(params.get("text", "")),
+        "browser_type": lambda: browser_type(params.get("text", ""), params.get("field_hint", "")),
+        "browser_type_and_enter": lambda: browser_type_and_enter(params.get("text", "")),
+        "browser_read_page": lambda: browser_read_page(),
+        "browser_back": lambda: browser_back(),
+        "browser_new_tab": lambda: browser_new_tab(params.get("url", "")),
+        "browser_close_tab": lambda: browser_close_tab(),
+        "browser_scroll": lambda: browser_scroll(params.get("direction", "down")),
+        "close_browser": lambda: close_browser(),
+        # Visión de pantalla
+        "analyze_screen": lambda: analyze_screen_with_ai(params.get("question", "")),
         # UI / Widgets
         "add_widget": lambda: add_widget(
             params.get("type", params.get("widget", "")),

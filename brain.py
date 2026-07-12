@@ -5,6 +5,7 @@ Maneja la comunicación con Gemini o OpenRouter.
 """
 
 import json
+import base64
 import urllib.request
 import urllib.error
 
@@ -35,10 +36,16 @@ CAPACIDADES QUE TIENES (puedes indicar al usuario que las use):
 - Abrir archivos con su programa predeterminado
 - Modificar el dashboard de widgets: agregar, quitar, mover, redimensionar widgets
 - Cambiar el tema visual (color de acento, modo claro/oscuro)
+- Controlar el mouse y teclado (click, escribir texto, atajos, mover ventanas)
+- Controlar el navegador Chrome (buscar, hacer click en cosas, escribir en campos, leer páginas)
+- Ver y analizar lo que hay en la pantalla del usuario
 
 REGLAS:
 - Responde de forma concisa pero útil
 - Si el usuario pide algo peligroso, adviértele
+- Antes de usar mouse_click, mouse_move o browser_click con coordenadas o texto específico,
+  si no tienes certeza de dónde está el elemento, usa primero analyze_screen para ver la pantalla actual
+- Los comandos de mouse/teclado actúan sobre lo que esté activo en la pantalla del usuario en ese momento — úsalos con cuidado
 - Usa emojis ocasionalmente para ser más claro
 - Nunca inventes información que no tengas
 - Para rutas, usa rutas completas de Windows (ej: C:\\Users\\FREYMAR\\Desktop)
@@ -105,6 +112,35 @@ Tipos de acción disponibles:
 - spotify_now_playing: {{"action": "spotify_now_playing", "params": {{}}}}
 - spotify_shuffle: {{"action": "spotify_shuffle", "params": {{"state": true}}}}
 - spotify_repeat: {{"action": "spotify_repeat", "params": {{"state": "track"}}}}
+- mouse_click: {{"action": "mouse_click", "params": {{"x": 500, "y": 300}}}}
+- mouse_double_click: {{"action": "mouse_double_click", "params": {{"x": 500, "y": 300}}}}
+- mouse_right_click: {{"action": "mouse_right_click", "params": {{"x": 500, "y": 300}}}}
+- mouse_move: {{"action": "mouse_move", "params": {{"x": 500, "y": 300}}}}
+- mouse_scroll: {{"action": "mouse_scroll", "params": {{"clicks": -3}}}}
+- type_text: {{"action": "type_text", "params": {{"text": "Hola mundo"}}}}
+- press_key: {{"action": "press_key", "params": {{"key": "enter"}}}}
+- hotkey: {{"action": "hotkey", "params": {{"keys": ["ctrl", "c"]}}}}
+- focus_window: {{"action": "focus_window", "params": {{"title": "Chrome"}}}}
+- minimize_window: {{"action": "minimize_window", "params": {{"title": "Chrome"}}}}
+- maximize_window: {{"action": "maximize_window", "params": {{"title": "Chrome"}}}}
+- list_windows: {{"action": "list_windows", "params": {{}}}}
+- copy_selection: {{"action": "copy_selection", "params": {{}}}}
+- paste_text: {{"action": "paste_text", "params": {{}}}}
+- select_all: {{"action": "select_all", "params": {{}}}}
+- undo: {{"action": "undo", "params": {{}}}}
+- browser_search: {{"action": "browser_search", "params": {{"query": "clima en Bogotá"}}}}
+- browser_go_to: {{"action": "browser_go_to", "params": {{"url": "https://youtube.com"}}}}
+- browser_click: {{"action": "browser_click", "params": {{"text": "Iniciar sesión"}}}}
+- browser_type: {{"action": "browser_type", "params": {{"text": "hola", "field_hint": "buscar"}}}}
+- browser_type_and_enter: {{"action": "browser_type_and_enter", "params": {{"text": "gatos graciosos"}}}}
+- browser_read_page: {{"action": "browser_read_page", "params": {{}}}}
+- browser_back: {{"action": "browser_back", "params": {{}}}}
+- browser_new_tab: {{"action": "browser_new_tab", "params": {{"url": "https://gmail.com"}}}}
+- browser_close_tab: {{"action": "browser_close_tab", "params": {{}}}}
+- browser_scroll: {{"action": "browser_scroll", "params": {{"direction": "down"}}}}
+- close_browser: {{"action": "close_browser", "params": {{}}}}
+- analyze_screen: {{"action": "analyze_screen", "params": {{"question": "¿qué error muestra esta ventana?"}}}}
+  Si el usuario no da una pregunta específica, deja "question" vacío y describirá la pantalla en general.
 
 INTERFAZ DE WIDGETS (puedes modificar el dashboard del usuario):
 - add_widget: {{"action": "add_widget", "params": {{"type": "weather", "x": 0, "y": 0, "w": 2, "h": 2}}}}
@@ -273,3 +309,63 @@ def think(messages: list) -> str:
         return _call_openrouter(messages, full_system_prompt)
     else:
         return f"❌ Proveedor de IA no reconocido: {AI_PROVIDER}"
+
+
+def analyze_screen_with_ai(question: str = "") -> str:
+    """
+    Captura la pantalla actual y la envía a Gemini Vision para analizarla.
+    Si el usuario no da una pregunta específica, describe lo que ve.
+    """
+    if AI_PROVIDER != "gemini":
+        return ("❌ La visión de pantalla solo funciona con Gemini por ahora. "
+                "Tu AI_PROVIDER actual es '" + AI_PROVIDER + "'. Cambia a 'gemini' en tu .env para usarla.")
+
+    if not GEMINI_API_KEY:
+        return "❌ Error: No hay API key de Gemini configurada."
+
+    from screen_vision import capture_screen
+    image_b64 = capture_screen(quality=70)
+
+    if not image_b64:
+        return "❌ No pude capturar la pantalla."
+
+    prompt = question.strip() or "Describe brevemente qué ves en esta pantalla. Sé conciso."
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
+
+    payload = {
+        "contents": [{
+            "role": "user",
+            "parts": [
+                {"text": prompt},
+                {"inline_data": {"mime_type": "image/jpeg", "data": image_b64}},
+            ],
+        }],
+        "generationConfig": {
+            "temperature": 0.4,
+            "maxOutputTokens": 512,
+        },
+    }
+
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url, data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=30) as response:
+            result = json.loads(response.read().decode("utf-8"))
+            candidates = result.get("candidates", [])
+            if candidates:
+                parts = candidates[0].get("content", {}).get("parts", [])
+                if parts:
+                    return "👁️ " + parts[0].get("text", "No pude analizar la imagen.")
+            return "❌ No recibí respuesta del análisis visual."
+    except urllib.error.HTTPError as e:
+        return f"❌ Error de Gemini Vision (HTTP {e.code})"
+    except urllib.error.URLError as e:
+        return f"❌ Error de conexión: {e.reason}"
+    except Exception as e:
+        return f"❌ Error inesperado analizando pantalla: {e}"

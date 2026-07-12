@@ -123,6 +123,10 @@ def web_search(query: str) -> str:
     Usa la API instantánea de DuckDuckGo (gratis, sin key).
     """
     try:
+        cached = get_cached("search", query)
+        if cached:
+            return cached
+
         query_encoded = urllib.parse.quote(query)
         url = f"https://api.duckduckgo.com/?q={query_encoded}&format=json&no_html=1&skip_disambig=1"
 
@@ -166,7 +170,9 @@ def web_search(query: str) -> str:
             return f"🔍 No encontré un resumen rápido. Abrí la búsqueda en tu navegador: {query}"
 
         log_action(f"Búsqueda web: {query}")
-        return "\n".join(results)
+        result_text = "\n".join(results)
+        set_cached("search", query, result_text)
+        return result_text
 
     except Exception as e:
         return f"❌ Error en búsqueda: {e}"
@@ -212,6 +218,10 @@ def get_news(category: str = "general") -> str:
     url = feeds.get(category.lower(), feeds["general"])
 
     try:
+        cached = get_cached("news", category.lower())
+        if cached:
+            return cached
+
         req = urllib.request.Request(
             url,
             headers={"User-Agent": "BT-7274/1.0"}
@@ -250,6 +260,7 @@ def get_news(category: str = "general") -> str:
                 result += f"     📅 {date_text}\n"
 
         log_action(f"Consultó noticias: {category}")
+        set_cached("news", category.lower(), result)
         return result
 
     except Exception as e:
@@ -271,6 +282,10 @@ def get_datetime() -> str:
 def get_definition(word: str) -> str:
     """Busca la definición de una palabra (usa DictionaryAPI, gratis)."""
     try:
+        cached = get_cached("definition", word.lower())
+        if cached:
+            return cached
+
         url = f"https://api.dictionaryapi.dev/api/v2/entries/es/{urllib.parse.quote(word)}"
 
         req = urllib.request.Request(
@@ -294,6 +309,7 @@ def get_definition(word: str) -> str:
                 for d in definitions[:2]:
                     result += f"    • {d.get('definition', '')}\n"
 
+            set_cached("definition", word.lower(), result)
             return result
         else:
             return f"❌ No encontré definición para '{word}'."
