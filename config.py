@@ -11,6 +11,15 @@ from dotenv import load_dotenv
 # Cargar variables de entorno desde .env
 load_dotenv(Path(__file__).parent / ".env")
 
+
+def _env_int(name: str, default: int, minimum: int = 1, maximum: int = 65535) -> int:
+    """Lee un entero de entorno sin impedir que el asistente arranque."""
+    try:
+        value = int(os.getenv(name, str(default)))
+        return value if minimum <= value <= maximum else default
+    except (TypeError, ValueError):
+        return default
+
 # ═══════════════════════════════════════════
 # MODELO DE IA
 # ═══════════════════════════════════════════
@@ -112,7 +121,7 @@ APPS = {
 # ═══════════════════════════════════════════
 # UBICACIÓN
 # ═══════════════════════════════════════════
-DEFAULT_CITY = "Barrancabermeja"
+DEFAULT_CITY = os.getenv("BT7274_CITY", "Barrancabermeja").strip() or "Barrancabermeja"
 
 # ═══════════════════════════════════════════
 # SPOTIFY
@@ -133,6 +142,11 @@ ELEVENLABS_VOICE_ID = "ErXwobaYiN019PkySvjV"  # Antoni
 PROJECT_DIR = Path(__file__).parent
 DATA_DIR = PROJECT_DIR / "data"
 LOG_FILE = PROJECT_DIR / "bt7274_log.txt"
+HTTP_HOST = "127.0.0.1"
+HTTP_PORT = _env_int("BT7274_HTTP_PORT", 8080)
+WEBSOCKET_PORT = _env_int("BT7274_WEBSOCKET_PORT", 8765)
+MAX_MESSAGE_CHARS = _env_int("BT7274_MAX_MESSAGE_CHARS", 10_000, minimum=100, maximum=100_000)
+MAX_CONVERSATION_MESSAGES = _env_int("BT7274_MAX_CONVERSATION_MESSAGES", 12, minimum=4, maximum=50)
 
 # Crear directorio de datos si no existe
 DATA_DIR.mkdir(exist_ok=True)

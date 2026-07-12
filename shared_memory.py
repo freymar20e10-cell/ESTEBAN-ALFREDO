@@ -14,6 +14,7 @@ from memory import (
     set_preference as _set_preference,
     get_preference as _get_preference,
     add_note as _add_note,
+    get_notes as _get_notes,
     get_notes_raw as _get_notes_raw,
     delete_note as _delete_note,
     save_project as _save_project,
@@ -38,9 +39,9 @@ def add_note(content: str) -> str:
     return _add_note(content)
 
 
-def get_notes() -> list:
-    """Server.py espera poder iterar esto para widgets; devolvemos la lista cruda."""
-    return _get_notes_raw(limit=50)
+def get_notes() -> str:
+    """Devuelve texto apto para el chat y el motor de voz."""
+    return _get_notes()
 
 
 def delete_note(index: int) -> str:

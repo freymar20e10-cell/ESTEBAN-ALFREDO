@@ -6,9 +6,14 @@
 
 ## Inicio rápido
 
-1. Configura tus API keys en `.env`
-2. Ejecuta: `python server.py` o doble click en `INICIAR_BT7274.bat`
-3. Se abre la interfaz en el navegador
+1. Instala Python 3.11 o posterior y marca **Add Python to PATH** durante la instalación.
+2. Copia `.env.example` como `.env` y configura al menos una clave de IA.
+3. Instala dependencias: `py -3 -m pip install -r requirements.txt`
+4. Ejecuta `py -3 server.py` o doble clic en `INICIAR_BT7274.bat`.
+
+Las acciones que pueden modificar el sistema, archivos o datos siempre solicitan
+confirmación. Es una medida deliberada para que el asistente sea potente sin
+darle autorización implícita a una respuesta de IA.
 
 ## Capacidades
 

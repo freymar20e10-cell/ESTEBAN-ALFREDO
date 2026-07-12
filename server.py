@@ -10,7 +10,7 @@ import json
 import sys
 import threading
 import webbrowser
-from http.server import HTTPServer, SimpleHTTPRequestHandler
+from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 
 import websockets
@@ -26,9 +26,13 @@ def safe_print(text):
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from config import ASSISTANT_NAME, USER_NAME
+from config import (
+    ASSISTANT_NAME, USER_NAME, HTTP_HOST, HTTP_PORT,
+    WEBSOCKET_PORT, MAX_MESSAGE_CHARS, MAX_CONVERSATION_MESSAGES,
+)
 from brain import think, analyze_screen_with_ai
 from actions import open_app, close_app, run_command, play_youtube, play_spotify_search, get_system_info, log_action
+from logger import log_error
 from file_manager import (
     list_files, create_folder, create_file, read_file,
     move_file, copy_file, rename_file, delete_file,
@@ -41,7 +45,7 @@ from shared_memory import (
 from scheduler import (
     add_event, get_events_today, get_events_by_date, get_events_week,
     delete_event, add_task, get_tasks, complete_task, delete_task,
-    add_reminder, get_reminders, get_daily_summary
+    add_reminder, get_reminders, get_daily_summary, restore_pending_reminders
 )
 from internet import get_weather, web_search, open_url, search_and_open, get_news, get_datetime, get_definition
 from spotify_control import (
@@ -78,7 +82,7 @@ connected_clients = set()
 main_loop = None
 
 import concurrent.futures
-from security import set_confirmation_backend
+from security import request_confirmation, set_confirmation_backend
 
 # Confirmaciones pendientes: id -> Future que se resuelve cuando el usuario responde en la UI
 _pending_confirmations: dict[str, concurrent.futures.Future] = {}
@@ -122,8 +126,14 @@ set_confirmation_backend(_ask_confirmation_via_ui)
 # ═══════════════════════════════════════════
 
 def execute_action(action_data: dict) -> str:
+    if not isinstance(action_data, dict):
+        return "⚠️ La acción recibida no tiene un formato válido."
     action_type = action_data.get("action", "")
     params = action_data.get("params", {})
+    if not isinstance(action_type, str) or not action_type.strip():
+        return "⚠️ La acción no tiene un nombre válido."
+    if not isinstance(params, dict):
+        return "⚠️ Los parámetros de la acción no son válidos."
 
     actions_map = {
         "open_app": lambda: open_app(params.get("name", "")),
@@ -151,6 +161,7 @@ def execute_action(action_data: dict) -> str:
         "save_project": lambda: save_project(params.get("name", ""), params.get("description", "")),
         "get_projects": lambda: get_projects(),
         "get_memory": lambda: get_all_facts(),
+        "clear_memory": lambda: clear_memory(),
         "add_event": lambda: add_event(params.get("title", ""), params.get("date", ""), params.get("time", ""), params.get("description", "")),
         "get_events_today": lambda: get_events_today(),
         "get_events_date": lambda: get_events_by_date(params.get("date", "")),
@@ -246,11 +257,31 @@ def execute_action(action_data: dict) -> str:
         "resize_widget", "set_theme", "reset_layout",
     }
 
+    # Estas acciones borran información o producen una interacción que no se
+    # puede deshacer con fiabilidad. La IA puede proponerlas, pero no aprobarlas.
+    confirmation_required = {
+        "delete_note": "Eliminar una nota guardada",
+        "delete_event": "Eliminar un evento del calendario",
+        "delete_task": "Eliminar una tarea",
+        "clear_memory": "Borrar toda la memoria del asistente",
+        "close_browser": "Cerrar el navegador controlado",
+    }
+    if action_type in confirmation_required:
+        if not request_confirmation(confirmation_required[action_type]):
+            return "🚫 Acción cancelada por el usuario."
+
     if action_type in actions_map:
-        result = actions_map[action_type]()
-        if action_type in UI_ACTIONS:
-            broadcast_sync({"type": "layout_update", "layout": get_layout()})
-        return result
+        try:
+            result = actions_map[action_type]()
+            if action_type in UI_ACTIONS:
+                broadcast_sync({"type": "layout_update", "layout": get_layout()})
+            return result
+        except (TypeError, ValueError) as error:
+            log_error("server", f"Parámetros inválidos para {action_type}: {error}")
+            return f"⚠️ Parámetros inválidos para la acción '{action_type}'."
+        except Exception as error:
+            log_error("server", f"Error ejecutando {action_type}: {error}")
+            return f"❌ No pude completar la acción '{action_type}'."
     return f"⚠️ Acción desconocida: {action_type}"
 
 
@@ -298,8 +329,8 @@ def process_message(user_input: str) -> str:
 
     with conversation_lock:
         conversation.append({"role": "user", "content": user_input})
-        if len(conversation) > 20:
-            conversation = conversation[-20:]
+        if len(conversation) > MAX_CONVERSATION_MESSAGES:
+            conversation = conversation[-MAX_CONVERSATION_MESSAGES:]
         snapshot = list(conversation)
 
     response = think(snapshot)
@@ -358,7 +389,14 @@ async def handle_client(websocket):
 
     try:
         async for message in websocket:
-            data = json.loads(message)
+            try:
+                data = json.loads(message)
+            except (json.JSONDecodeError, TypeError):
+                await websocket.send(json.dumps({"type": "error", "content": "Mensaje inválido."}))
+                continue
+            if not isinstance(data, dict):
+                await websocket.send(json.dumps({"type": "error", "content": "Mensaje inválido."}))
+                continue
             msg_type = data.get("type", "")
             content = data.get("content", "")
 
@@ -371,7 +409,9 @@ async def handle_client(websocket):
 
             if msg_type == "widget_data":
                 widget_type = data.get("widget", "")
-                payload = get_widget_data(widget_type)
+                # Clima y Spotify pueden consultar red; no bloquean el loop
+                # WebSocket ni las confirmaciones de otras acciones.
+                payload = await asyncio.to_thread(get_widget_data, widget_type)
                 await websocket.send(json.dumps({
                     "type": "widget_data",
                     "widget": widget_type,
@@ -388,6 +428,12 @@ async def handle_client(websocket):
                 continue
 
             if msg_type == "message":
+                if not isinstance(content, str) or not content.strip():
+                    await websocket.send(json.dumps({"type": "error", "content": "Escribe un mensaje válido."}))
+                    continue
+                if len(content) > MAX_MESSAGE_CHARS:
+                    await websocket.send(json.dumps({"type": "error", "content": "El mensaje es demasiado largo."}))
+                    continue
                 # Verificar si es comando de voz
                 content_lower = content.lower().strip()
 
@@ -481,7 +527,7 @@ class BTHTTPRequestHandler(SimpleHTTPRequestHandler):
 
 
 def start_http_server():
-    httpd = HTTPServer(("127.0.0.1", 8080), BTHTTPRequestHandler)
+    httpd = ThreadingHTTPServer((HTTP_HOST, HTTP_PORT), BTHTTPRequestHandler)
     httpd.serve_forever()
 
 
@@ -492,6 +538,7 @@ def start_http_server():
 async def main():
     global main_loop
     main_loop = asyncio.get_event_loop()
+    restored_reminders = restore_pending_reminders()
 
     from config import validate_config
     problems = validate_config()
@@ -509,13 +556,15 @@ async def main():
                  "Protocolo 3: Proteger al Piloto"
 ================================================================================
 
-  Web UI:      http://127.0.0.1:8080
+  Web UI:      http://{HTTP_HOST}:{HTTP_PORT}
   Chat texto:  Siempre disponible
   Chat voz:    Escribe 'activa chat de voz'
   
   Para cerrar: Ctrl+C
 ================================================================================
 """)
+    if restored_reminders:
+        print(f"  [OK] {restored_reminders} recordatorio(s) restaurado(s).")
 
     # HTTP server
     http_thread = threading.Thread(target=start_http_server, daemon=True)
@@ -523,7 +572,7 @@ async def main():
 
     # Abrir navegador
     print("  [>] Abriendo BT-7274...")
-    webbrowser.open("http://127.0.0.1:8080")
+    webbrowser.open(f"http://{HTTP_HOST}:{HTTP_PORT}")
     print(f"  [OK] Listo. Escribe o activa chat de voz.\n")
 
     # Beep
@@ -536,7 +585,10 @@ async def main():
         pass
 
     # WebSocket
-    async with websockets.serve(handle_client, "127.0.0.1", 8765):
+    async with websockets.serve(
+        handle_client, HTTP_HOST, WEBSOCKET_PORT,
+        ping_interval=20, ping_timeout=20, max_size=MAX_MESSAGE_CHARS * 2,
+    ):
         await asyncio.Future()
 
 

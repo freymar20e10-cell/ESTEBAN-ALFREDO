@@ -5,7 +5,7 @@
 
 const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, shell } = require('electron');
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const fs = require('fs');
 
 // Evitar múltiples instancias
@@ -31,9 +31,36 @@ let mainWindow = null;
 let tray = null;
 let pythonProcess = null;
 let isQuitting = false;
+let serverAvailable = true;
 
 const PYTHON_SERVER_PORT = 8765;
 const HTTP_SERVER_PORT = 8080;
+
+function resolvePython() {
+    const candidates = [
+        { command: 'py', args: ['-3'] },
+        { command: 'python', args: [] },
+    ];
+    for (const candidate of candidates) {
+        const result = spawnSync(candidate.command, [...candidate.args, '--version'], {
+            windowsHide: true,
+            encoding: 'utf8',
+        });
+        if (!result.error && result.status === 0) return candidate;
+    }
+    return null;
+}
+
+function openExternalUrl(url) {
+    try {
+        const parsed = new URL(url);
+        if (!['http:', 'https:'].includes(parsed.protocol)) return false;
+        shell.openExternal(parsed.toString());
+        return true;
+    } catch (_) {
+        return false;
+    }
+}
 
 // ═══════════════════════════════════════════
 // INICIAR SERVIDOR PYTHON
@@ -48,11 +75,18 @@ function startPythonServer() {
         return;
     }
 
+    const python = resolvePython();
+    if (!python) {
+        console.error('No se encontró Python 3. Instálalo y añádelo al PATH.');
+        return false;
+    }
+
     console.log('Iniciando servidor Python...');
-    pythonProcess = spawn('python', [serverPath], {
+    pythonProcess = spawn(python.command, [...python.args, serverPath], {
         cwd: projectDir,
         stdio: ['ignore', 'pipe', 'pipe'],
         detached: false,
+        windowsHide: true,
     });
 
     pythonProcess.stdout.on('data', (data) => {
@@ -76,7 +110,9 @@ function startPythonServer() {
 
     pythonProcess.on('close', (code) => {
         console.log(`Servidor Python cerrado (código ${code})`);
+        pythonProcess = null;
     });
+    return true;
 }
 
 function stopPythonServer() {
@@ -109,6 +145,34 @@ function createWindow() {
         show: false,            // No mostrar hasta que cargue
     });
 
+    const isAssistantUrl = (url) => {
+        try {
+            const parsed = new URL(url);
+            return parsed.hostname === '127.0.0.1' && Number(parsed.port) === HTTP_SERVER_PORT;
+        } catch (_) {
+            return false;
+        }
+    };
+
+    mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+        if (!isAssistantUrl(url)) openExternalUrl(url);
+        return { action: 'deny' };
+    });
+    mainWindow.webContents.on('will-navigate', (event, url) => {
+        if (!isAssistantUrl(url)) {
+            event.preventDefault();
+            openExternalUrl(url);
+        }
+    });
+
+    if (!serverAvailable) {
+        mainWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(
+            '<main style="font-family:Segoe UI,sans-serif;padding:32px;background:#0a0f1a;color:#e5f4ff">' +
+            '<h1>BT-7274 necesita Python 3</h1>' +
+            '<p>Instala Python y activa la opción Add Python to PATH. Luego ejecuta:</p>' +
+            '<pre>py -3 -m pip install -r requirements.txt</pre></main>'
+        ));
+    } else {
     // Esperar a que el servidor Python esté listo, luego cargar
     let retries = 0;
     const tryLoad = () => {
@@ -130,6 +194,7 @@ function createWindow() {
     };
 
     setTimeout(tryLoad, 1000);
+    }
 
     mainWindow.once('ready-to-show', () => {
         mainWindow.show();
@@ -253,7 +318,7 @@ ipcMain.handle('set-autostart', (_, enable) => {
 });
 
 ipcMain.handle('open-external', (_, url) => {
-    shell.openExternal(url);
+    return openExternalUrl(url);
 });
 
 // ═══════════════════════════════════════════
@@ -262,7 +327,7 @@ ipcMain.handle('open-external', (_, url) => {
 
 app.whenReady().then(() => {
     // Iniciar servidor Python
-    startPythonServer();
+    serverAvailable = startPythonServer();
 
     // Crear ventana
     createWindow();

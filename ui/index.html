@@ -300,7 +300,10 @@ function genGalaxy(n) {
 }
 
 // ════════════════════ THREE.JS CORE ════════════════════
-const COUNT = 5000;
+const cores = navigator.hardwareConcurrency || 4;
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const COUNT = reducedMotion ? 900 : (cores <= 4 ? 1800 : cores <= 8 ? 3000 : 4200);
+const FRAME_INTERVAL = cores <= 4 ? 1000 / 30 : 1000 / 60;
 const mount = document.getElementById('core-canvas');
 const width = mount.clientWidth || 800;
 const height = mount.clientHeight || 600;
@@ -311,7 +314,7 @@ camera.position.z = 7;
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setSize(width, height);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 mount.appendChild(renderer.domElement);
 
 let currentState = 'escuchando';
@@ -425,7 +428,13 @@ let morph = 1, lastShape = currentShape, lastState = currentState;
 const glowColor = new THREE.Color(...STATES[currentState].color);
 const clock = new THREE.Clock();
 
-function tick() {
+let lastFrameTime = 0;
+function tick(frameTime = 0) {
+  if (document.hidden || frameTime - lastFrameTime < FRAME_INTERVAL) {
+    requestAnimationFrame(tick);
+    return;
+  }
+  lastFrameTime = frameTime;
   const t = clock.getElapsedTime();
   const style = STATES[currentState];
 
@@ -488,7 +497,7 @@ function tick() {
   renderer.render(scene, camera);
   requestAnimationFrame(tick);
 }
-tick();
+requestAnimationFrame(tick);
 
 window.addEventListener('resize', () => {
   const w = mount.clientWidth || 800;

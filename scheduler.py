@@ -68,7 +68,7 @@ def add_event(title: str, date: str, time_str: str = "", description: str = "") 
             return f"❌ Formato de hora inválido. Usa HH:MM (ej: 14:30)"
 
     event = {
-        "id": len(events) + 1,
+        "id": _next_id(events),
         "title": title,
         "date": date,
         "time": time_str,
@@ -158,7 +158,7 @@ def add_task(title: str, priority: str = "normal") -> str:
     tasks = _load_json(TASKS_FILE)
 
     task = {
-        "id": len(tasks) + 1,
+        "id": _next_id(tasks),
         "title": title,
         "priority": priority,
         "completed": False,
@@ -240,6 +240,11 @@ def delete_task(task_id: int) -> str:
 _active_reminders = []
 
 
+def _next_id(items: list) -> int:
+    """Genera IDs estables aunque se hayan eliminado registros anteriores."""
+    return max((int(item.get("id", 0)) for item in items), default=0) + 1
+
+
 def add_reminder(message: str, minutes: int = 0, time_str: str = "") -> str:
     """
     Agrega un recordatorio.
@@ -271,7 +276,7 @@ def add_reminder(message: str, minutes: int = 0, time_str: str = "") -> str:
         return "❌ Necesito saber cuándo recordarte. Dime los minutos o la hora."
 
     reminder = {
-        "id": len(reminders) + 1,
+        "id": _next_id(reminders),
         "message": message,
         "trigger_time": trigger_time.isoformat(),
         "created_at": now.isoformat(),
@@ -282,16 +287,27 @@ def add_reminder(message: str, minutes: int = 0, time_str: str = "") -> str:
     _save_json(REMINDERS_FILE, reminders)
 
     # Programar el recordatorio en segundo plano
-    _schedule_reminder(message, minutes)
+    _schedule_reminder(message, (trigger_time - now).total_seconds(), reminder["id"])
 
     log_action(f"Recordatorio creado: '{message}' {time_display}")
     return f"⏰ Recordatorio programado: '{message}' — {time_display} ({trigger_time.strftime('%H:%M')})"
 
 
-def _schedule_reminder(message: str, minutes: int):
-    """Programa un recordatorio en segundo plano."""
+def _mark_reminder_triggered(reminder_id: int):
+    reminders = _load_json(REMINDERS_FILE)
+    for reminder in reminders:
+        if reminder.get("id") == reminder_id:
+            reminder["triggered"] = True
+            reminder["triggered_at"] = datetime.now().isoformat()
+            _save_json(REMINDERS_FILE, reminders)
+            return
+
+
+def _schedule_reminder(message: str, delay_seconds: float, reminder_id: int):
+    """Programa un recordatorio y persiste que fue entregado."""
     def _alert():
-        time.sleep(minutes * 60)
+        time.sleep(max(0, delay_seconds))
+        _mark_reminder_triggered(reminder_id)
         print(f"\n\n🔔 ═══════════════════════════════════════")
         print(f"   RECORDATORIO: {message}")
         print(f"   ═══════════════════════════════════════ 🔔\n")
@@ -306,6 +322,26 @@ def _schedule_reminder(message: str, minutes: int):
     timer = threading.Thread(target=_alert, daemon=True)
     timer.start()
     _active_reminders.append(timer)
+
+
+def restore_pending_reminders() -> int:
+    """Reprograma recordatorios pendientes después de reiniciar el asistente."""
+    now = datetime.now()
+    restored = 0
+    for reminder in _load_json(REMINDERS_FILE):
+        if reminder.get("triggered"):
+            continue
+        try:
+            trigger_time = datetime.fromisoformat(reminder["trigger_time"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        delay = (trigger_time - now).total_seconds()
+        if delay <= 0:
+            _mark_reminder_triggered(reminder.get("id", 0))
+            continue
+        _schedule_reminder(reminder.get("message", "Recordatorio"), delay, reminder.get("id", 0))
+        restored += 1
+    return restored
 
 
 def get_reminders() -> str:

@@ -9,7 +9,7 @@ import subprocess
 from pathlib import Path
 from datetime import datetime
 
-from security import is_protected_path, request_confirmation, is_dangerous_command
+from security import is_protected_path, request_confirmation
 from logger import log_action
 
 
@@ -24,6 +24,13 @@ FILE_CATEGORIES = {
     "Ejecutables": [".exe", ".msi", ".bat", ".cmd"],
     "Otros": [],
 }
+
+
+def _confirm_protected_path(path: Path, action: str) -> bool:
+    """Solicita aprobación antes de actuar sobre rutas con datos sensibles."""
+    return not is_protected_path(str(path)) or request_confirmation(
+        f"{action} en ruta protegida: {path}"
+    )
 
 
 def list_files(path: str, show_hidden: bool = False) -> str:
@@ -81,6 +88,8 @@ def create_folder(path: str) -> str:
     """Crea una carpeta nueva."""
     try:
         target = Path(path).expanduser().resolve()
+        if not _confirm_protected_path(target, "Crear carpeta"):
+            return "🚫 Creación cancelada."
         target.mkdir(parents=True, exist_ok=True)
         log_action(f"Creó carpeta: {target}")
         return f"✅ Carpeta creada: {target}"
@@ -92,6 +101,10 @@ def create_file(path: str, content: str = "") -> str:
     """Crea un archivo nuevo con contenido opcional."""
     try:
         target = Path(path).expanduser().resolve()
+        if not _confirm_protected_path(target, "Crear o modificar archivo"):
+            return "🚫 Operación cancelada."
+        if target.exists() and not request_confirmation(f"Sobrescribir archivo: {target}"):
+            return "🚫 Sobrescritura cancelada."
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
         log_action(f"Creó archivo: {target}")
@@ -147,6 +160,9 @@ def move_file(source: str, destination: str) -> str:
         if dst.is_dir():
             dst = dst / src.name
 
+        if not _confirm_protected_path(src, "Mover") or not _confirm_protected_path(dst, "Mover"):
+            return "🚫 Movimiento cancelado."
+
         confirmed = request_confirmation(f"Mover: {src} → {dst}")
         if not confirmed:
             return "🚫 Movimiento cancelado."
@@ -169,11 +185,19 @@ def copy_file(source: str, destination: str) -> str:
             return f"❌ No existe: {src}"
 
         if src.is_dir():
+            if not _confirm_protected_path(src, "Copiar") or not _confirm_protected_path(dst, "Copiar"):
+                return "🚫 Copia cancelada."
+            if dst.exists() and not request_confirmation(f"La carpeta destino ya existe: {dst}"):
+                return "🚫 Copia cancelada."
             shutil.copytree(str(src), str(dst))
         else:
             # Si destino es carpeta, copiar dentro
             if dst.is_dir():
                 dst = dst / src.name
+            if not _confirm_protected_path(src, "Copiar") or not _confirm_protected_path(dst, "Copiar"):
+                return "🚫 Copia cancelada."
+            if dst.exists() and not request_confirmation(f"Sobrescribir archivo destino: {dst}"):
+                return "🚫 Copia cancelada."
             shutil.copy2(str(src), str(dst))
 
         log_action(f"Copió: {src} → {dst}")
@@ -191,7 +215,13 @@ def rename_file(path: str, new_name: str) -> str:
         if not target.exists():
             return f"❌ No existe: {target}"
 
+        if not new_name or Path(new_name).name != new_name:
+            return "❌ El nuevo nombre debe ser solo un nombre, sin rutas."
         new_path = target.parent / new_name
+        if not _confirm_protected_path(target, "Renombrar"):
+            return "🚫 Cambio de nombre cancelado."
+        if new_path.exists() and not request_confirmation(f"El destino ya existe: {new_path}"):
+            return "🚫 Cambio de nombre cancelado."
         target.rename(new_path)
         log_action(f"Renombró: {target.name} → {new_name}")
         return f"✅ Renombrado: {target.name} → {new_name}"

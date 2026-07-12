@@ -8,10 +8,11 @@ import subprocess
 import webbrowser
 import os
 import urllib.request
+import re
 from datetime import datetime
 
 from config import APPS
-from security import is_dangerous_command, request_confirmation
+from security import request_confirmation
 from logger import log_action as _log_action, log_error
 
 
@@ -50,10 +51,15 @@ def close_app(app_name: str) -> str:
     app_key = app_name.lower().strip()
     process_name = close_map.get(app_key, f"{app_key}.exe")
 
+    # taskkill se invoca sin shell; aun así rechazamos nombres que no sean un
+    # ejecutable normal para impedir que el nombre se convierta en un comando.
+    if not re.fullmatch(r"[A-Za-z0-9_. -]+", process_name):
+        return "⚠️ El nombre de la aplicación no es válido."
+
     try:
         subprocess.run(
-            f"taskkill /IM {process_name} /F",
-            shell=True, capture_output=True, timeout=5
+            ["taskkill", "/IM", process_name, "/F"],
+            capture_output=True, text=True, timeout=5
         )
         log_action(f"Cerró aplicación: {app_name}")
         return f"✅ {app_name} cerrado."
@@ -65,6 +71,9 @@ def open_app(app_name: str) -> str:
     """Abre una aplicación por nombre."""
     app_key = app_name.lower().strip()
 
+    if not app_key:
+        return "⚠️ Indica qué aplicación quieres abrir."
+
     if app_key in APPS:
         executable = APPS[app_key]
         try:
@@ -74,7 +83,10 @@ def open_app(app_name: str) -> str:
         except Exception as e:
             return f"❌ Error al abrir {app_name}: {e}"
     else:
-        # Intentar abrir directamente como comando
+        # Una aplicación no registrada se trata como un comando y necesita
+        # aprobación explícita, igual que run_command.
+        if not request_confirmation(f"Abrir aplicación o comando no registrado:\n{app_key}"):
+            return "🚫 Apertura cancelada por el usuario."
         try:
             subprocess.Popen(app_key, shell=True)
             log_action(f"Abrió aplicación (directa): {app_name}")
@@ -84,11 +96,16 @@ def open_app(app_name: str) -> str:
 
 
 def run_command(command: str) -> str:
-    """Ejecuta un comando del sistema con verificación de seguridad."""
-    if is_dangerous_command(command):
-        confirmed = request_confirmation(f"Ejecutar: {command}")
-        if not confirmed:
-            return "🚫 Comando cancelado por el usuario."
+    """Ejecuta un comando solo tras la aprobación explícita del usuario."""
+    command = (command or "").strip()
+    if not command:
+        return "⚠️ No recibí ningún comando para ejecutar."
+    if len(command) > 2_000:
+        return "⚠️ El comando es demasiado largo."
+    # Un comando aparentemente inocuo puede incluir redirecciones, pipes o
+    # ejecutar otro programa. La IA nunca debe tener aprobación implícita.
+    if not request_confirmation(f"Ejecutar comando:\n{command}"):
+        return "🚫 Comando cancelado por el usuario."
 
     try:
         result = subprocess.run(
