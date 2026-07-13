@@ -438,10 +438,21 @@ def synthesize_answer(user_question: str, raw_data: str) -> str:
     return raw_data  # si la síntesis falla, mostrar el dato crudo es mejor que no responder nada
 
 
-def think_step(step_description: str, previous_results: list[str], original_request: str) -> str:
+def think_step(
+    step_description: str,
+    previous_results: list[str],
+    original_request: str,
+    agent_name: str = "GeneralAgent",
+    agent_description: str = "",
+) -> str:
     """
     Decide la acción JSON (o responde en texto) para UN paso específico de un
     plan, con el contexto de lo que ya se hizo antes en ese mismo plan.
+
+    Si se indica un agente especializado (agent_name distinto de
+    "GeneralAgent"), se le da a la IA una identidad enfocada en esa área,
+    para reducir el ruido de tener que considerar el catálogo completo de
+    acciones en cada paso.
     """
     context = ""
     if previous_results:
@@ -449,7 +460,17 @@ def think_step(step_description: str, previous_results: list[str], original_requ
             f"- {r}" for r in previous_results
         )
 
+    agent_intro = ""
+    if agent_name != "GeneralAgent":
+        agent_intro = (
+            f"Para este paso específico, actúa como {agent_name}: "
+            f"{agent_description} Prioriza usar acciones relacionadas con "
+            f"esta área si aplican, pero puedes usar cualquier acción del "
+            f"sistema si el paso realmente lo necesita.\n\n"
+        )
+
     step_prompt = (
+        f"{agent_intro}"
         f"Estás ejecutando un plan de varios pasos para cumplir esta petición "
         f"original del usuario: \"{original_request}\"\n\n"
         f"Paso actual a ejecutar: {step_description}"

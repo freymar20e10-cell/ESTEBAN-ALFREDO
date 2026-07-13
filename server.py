@@ -30,6 +30,7 @@ from config import (
     ASSISTANT_NAME, USER_NAME, HTTP_HOST, HTTP_PORT,
     WEBSOCKET_PORT, MAX_MESSAGE_CHARS, MAX_CONVERSATION_MESSAGES,
 )
+from agents import classify_agent
 from brain import (
     think, analyze_screen_with_ai, synthesize_answer, INFO_ACTIONS,
     think_step, synthesize_plan_summary,
@@ -332,24 +333,26 @@ MAX_PLAN_STEP_RETRIES = 1
 
 def execute_plan(steps: list[str], user_input: str) -> str:
     """
-    Ejecuta un plan de varios pasos: piensa -> actúa -> verifica por cada
-    paso, con un reintento simple si un paso falla, transmitiendo el
-    progreso a la UI en tiempo real.
+    Ejecuta un plan de varios pasos: clasifica cada paso a un agente
+    especializado, piensa -> actúa -> verifica, con un reintento simple si
+    un paso falla, transmitiendo el progreso a la UI en tiempo real.
     """
     results: list[str] = []
 
     broadcast_sync({"type": "plan_start", "steps": steps, "total": len(steps)})
 
     for i, step in enumerate(steps):
+        agent_name, agent_description = classify_agent(step)
+
         broadcast_sync({
             "type": "plan_step", "index": i, "total": len(steps),
-            "description": step, "status": "running",
+            "description": step, "status": "running", "agent": agent_name,
         })
 
         step_result = None
         for attempt in range(MAX_PLAN_STEP_RETRIES + 1):
             try:
-                step_response = think_step(step, results, user_input)
+                step_response = think_step(step, results, user_input, agent_name, agent_description)
                 step_action = try_parse_action(step_response)
                 if step_action:
                     step_result = execute_action(step_action)
@@ -366,6 +369,7 @@ def execute_plan(steps: list[str], user_input: str) -> str:
         broadcast_sync({
             "type": "plan_step", "index": i, "total": len(steps),
             "description": step, "status": "done", "result": results[-1],
+            "agent": agent_name,
         })
 
     broadcast_sync({"type": "plan_end"})

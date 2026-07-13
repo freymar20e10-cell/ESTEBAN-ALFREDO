@@ -607,7 +607,8 @@ function connectWS() {
     } else if (data.type === 'plan_start') {
       addMessage('jarvis', `🗂️ Voy a hacer esto en ${data.total} pasos...`);
     } else if (data.type === 'plan_step') {
-      const paso = `Paso ${data.index + 1}/${data.total}: ${data.description}`;
+      const prefijo = (data.agent && data.agent !== 'GeneralAgent') ? `[${data.agent}] ` : '';
+      const paso = `${prefijo}Paso ${data.index + 1}/${data.total}: ${data.description}`;
       document.getElementById('status-text').textContent =
         data.status === 'running' ? `⚙️ ${paso}` : `✅ ${paso}`;
     } else if (data.type === 'plan_end') {
