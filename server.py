@@ -373,7 +373,7 @@ def execute_plan(steps: list[str], user_input: str) -> str:
     return synthesize_plan_summary(user_input, steps, results)
 
 
-def process_message(user_input: str) -> str:
+def _process_message_core(user_input: str) -> str:
     global conversation
 
     direct = {
@@ -426,6 +426,21 @@ def process_message(user_input: str) -> str:
         with conversation_lock:
             conversation.append({"role": "assistant", "content": response})
         return response
+
+
+def process_message(user_input: str) -> str:
+    """
+    Wrapper de _process_message_core que además guarda cada intercambio en
+    la memoria semántica, para poder recordarlo por significado más adelante,
+    sin importar cuánto tiempo pase.
+    """
+    response = _process_message_core(user_input)
+    try:
+        from semantic_memory import remember_conversation_turn
+        remember_conversation_turn(user_input, response)
+    except Exception:
+        pass  # nunca dejar que un fallo de memoria semántica rompa la respuesta
+    return response
 
 
 # ═══════════════════════════════════════════

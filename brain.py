@@ -315,6 +315,21 @@ def think(messages: list) -> str:
     if memory_context:
         full_system_prompt += f"\n\nMEMORIA PERSISTENTE (información que ya sabes del usuario):\n{memory_context}"
 
+    # Memoria semántica: recupera fragmentos de conversaciones pasadas
+    # relevantes a la pregunta actual, sin importar cuánto tiempo pasó desde
+    # que se mencionaron (más allá de la ventana de MAX_CONVERSATION_MESSAGES).
+    try:
+        from semantic_memory import recall_relevant
+        last_user_msg = next(
+            (m["content"] for m in reversed(messages) if m.get("role") == "user"), ""
+        )
+        relevant = recall_relevant(last_user_msg, n_results=4)
+        if relevant:
+            recuerdos = "\n---\n".join(relevant)
+            full_system_prompt += f"\n\nRECUERDOS RELEVANTES DE CONVERSACIONES PASADAS:\n{recuerdos}"
+    except Exception:
+        pass  # si la memoria semántica falla por cualquier motivo, seguimos sin ella
+
     if AI_PROVIDER == "gemini":
         return _call_gemini(messages, full_system_prompt)
     elif AI_PROVIDER == "openrouter":
