@@ -23,6 +23,12 @@ _lock = threading.Lock()
 _collection = None
 _available = True
 
+# Sin límites, cada turno de conversación se acumula para siempre y con los
+# meses la memoria se vuelve lenta y llena de ruido ("hola", "ok", "gracias").
+MIN_TURN_CHARS = 25        # intercambios más cortos que esto no aportan nada recordable
+MAX_STORED_TURNS = 5000    # tope total; al superarlo se podan los más viejos
+PRUNE_BATCH = 500          # cuántos se borran de una vez al podar (para no podar en cada turno)
+
 
 def _get_collection():
     """Inicializa ChromaDB de forma perezosa (solo la primera vez que se usa)."""
@@ -45,7 +51,12 @@ def _get_collection():
 
 def remember_conversation_turn(user_message: str, assistant_message: str) -> None:
     """Guarda un intercambio de conversación para recordarlo semánticamente después."""
-    if not user_message.strip() or not assistant_message.strip():
+    user_message = user_message.strip()
+    assistant_message = assistant_message.strip()
+    if not user_message or not assistant_message:
+        return
+    # Saludos y confirmaciones triviales no merecen ocupar memoria a largo plazo.
+    if len(user_message) + len(assistant_message) < MIN_TURN_CHARS:
         return
     collection = _get_collection()
     if collection is None:
@@ -59,8 +70,24 @@ def remember_conversation_turn(user_message: str, assistant_message: str) -> Non
                 ids=[turn_id],
                 metadatas=[{"type": "conversation", "timestamp": datetime.now().isoformat()}],
             )
+            _prune_if_needed(collection)
     except Exception as e:
         log_action(f"No se pudo guardar memoria semántica: {e}")
+
+
+def _prune_if_needed(collection) -> None:
+    """Si la memoria superó el tope, borra el lote más viejo. Los IDs son
+    timestamps ('turn_<epoch>'), así que ordenarlos = ordenar por antigüedad."""
+    try:
+        count = collection.count()
+        if count <= MAX_STORED_TURNS:
+            return
+        all_ids = collection.get(include=[])["ids"]
+        oldest = sorted(all_ids)[:PRUNE_BATCH]
+        collection.delete(ids=oldest)
+        log_action(f"Memoria semántica podada: {len(oldest)} recuerdos antiguos eliminados ({count} → {count - len(oldest)})")
+    except Exception as e:
+        log_action(f"No se pudo podar la memoria semántica: {e}")
 
 
 def recall_relevant(query: str, n_results: int = 4) -> list[str]:

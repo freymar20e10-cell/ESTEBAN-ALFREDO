@@ -29,7 +29,12 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 
 GEMINI_MODEL = "gemini-2.0-flash"
-OPENROUTER_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "nvidia/nemotron-3-super-120b-a12b:free")
+
+# Ollama: modelos locales gratis, sin internet ni API key. Requiere la app
+# de Ollama abierta y un modelo descargado (ej: `ollama pull llama3.2`).
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
 
 # ═══════════════════════════════════════════
 # IDENTIDAD
@@ -167,9 +172,9 @@ def validate_config() -> list[str]:
         problems.append(
             "Falta OPENROUTER_API_KEY en tu .env (AI_PROVIDER está en 'openrouter')."
         )
-    elif AI_PROVIDER not in ("gemini", "openrouter"):
+    elif AI_PROVIDER not in ("gemini", "openrouter", "ollama"):
         problems.append(
-            f"AI_PROVIDER='{AI_PROVIDER}' no es válido. Usa 'gemini' u 'openrouter'."
+            f"AI_PROVIDER='{AI_PROVIDER}' no es válido. Usa 'gemini', 'openrouter' u 'ollama'."
         )
 
     return problems

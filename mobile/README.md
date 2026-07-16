@@ -19,7 +19,10 @@ App móvil de BT-7274 para Android. Funciona sin la PC.
 2. Conecta tu GitHub (o sube la carpeta `backend/`)
 3. Crea un "Web Service"
 4. Configura las variables de entorno (las de .env)
-5. Deploy → te da una URL tipo `https://bt7274-mobile.onrender.com`
+5. **Elige una clave secreta propia** (cualquier frase larga que solo tú sepas) y ponla en la variable `MOBILE_ACCESS_KEY`. Sin esto el backend rechaza todo — es lo que evita que cualquiera con la URL pueda leer tu memoria o usar tus créditos de IA.
+6. Deploy → te da una URL tipo `https://bt7274-mobile.onrender.com`
+
+⚠️ **Importante:** copia esa misma clave en `frontend/index.html`, reemplazando `CAMBIA-ESTO-POR-UNA-CLAVE-SECRETA` por tu clave real, ANTES de instalar la app en tu celular. Si no coinciden exactamente, la app no podrá hablar con el backend.
 
 ### 2. Frontend (tu celular)
 

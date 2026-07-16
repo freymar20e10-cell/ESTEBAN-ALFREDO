@@ -183,6 +183,11 @@ def open_url(url: str) -> str:
     if not url.startswith("http"):
         url = "https://" + url
 
+    from security import validate_public_url
+    ok, reason = validate_public_url(url)
+    if not ok:
+        return f"🚫 Navegación bloqueada: {reason}"
+
     webbrowser.open(url)
     log_action(f"Abrió URL: {url}")
     return f"🌐 Abriendo: {url}"

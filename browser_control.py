@@ -115,6 +115,11 @@ def browser_go_to(url: str) -> str:
     if not url.startswith("http"):
         url = "https://" + url
 
+    from security import validate_public_url
+    ok, reason = validate_public_url(url)
+    if not ok:
+        return f"🚫 Navegación bloqueada: {reason}"
+
     try:
         _driver.get(url)
         time.sleep(2)
@@ -268,12 +273,18 @@ def browser_new_tab(url: str = "") -> str:
     if err:
         return err
 
+    if url:
+        if not url.startswith("http"):
+            url = "https://" + url
+        from security import validate_public_url
+        ok, reason = validate_public_url(url)
+        if not ok:
+            return f"🚫 Navegación bloqueada: {reason}"
+
     try:
         _driver.execute_script("window.open('');")
         _driver.switch_to.window(_driver.window_handles[-1])
         if url:
-            if not url.startswith("http"):
-                url = "https://" + url
             _driver.get(url)
         log_action(f"Chrome: nueva pestaña {url}")
         return f"📑 Nueva pestaña abierta" + (f": {url}" if url else "")

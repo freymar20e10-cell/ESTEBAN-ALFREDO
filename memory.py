@@ -79,12 +79,25 @@ def _with_memory(fn):
 
 def remember(key: str, value: str) -> str:
     def _op(memory):
+        # Misma clave = actualizar, no duplicar. Si el usuario dice su ciudad
+        # dos veces, debe quedar UNA entrada con el valor más reciente — no dos
+        # entradas contradictorias que confundan a la IA al recordar.
+        norm_key = key.strip().lower()
+        for fact in memory["facts"]:
+            if fact.get("key", "").strip().lower() == norm_key:
+                fact["value"] = value
+                fact["saved_at"] = datetime.now().isoformat()
+                _op.updated = True
+                return
         memory["facts"].append({
             "key": key, "value": value,
             "saved_at": datetime.now().isoformat(),
         })
+        _op.updated = False
     _with_memory(_op)
     log_action(f"Memorizó: {key} = {value}")
+    if getattr(_op, "updated", False):
+        return f"🧠 Actualizado en memoria: {key} → {value}"
     return f"🧠 Guardado en memoria: {key} → {value}"
 
 

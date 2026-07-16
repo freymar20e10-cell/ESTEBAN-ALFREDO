@@ -15,13 +15,15 @@ from config import (
     OPENROUTER_API_KEY,
     GEMINI_MODEL,
     OPENROUTER_MODEL,
+    OLLAMA_URL,
+    OLLAMA_MODEL,
     ASSISTANT_NAME,
     USER_NAME,
 )
 from memory import get_memory_context
 
 
-SYSTEM_PROMPT = f"""Eres {ASSISTANT_NAME}, un asistente de IA personal tipo JARVIS. 
+_PROMPT_INTRO = f"""Eres {ASSISTANT_NAME}, un asistente de IA personal tipo JARVIS.
 Tu piloto se llama {USER_NAME}. Eres leal, directo, eficiente y con algo de personalidad.
 Hablas en español. Eres como el Titan BT-7274 de Titanfall: protector, confiable, y siempre listo.
 
@@ -68,105 +70,22 @@ Si necesitas que el sistema ejecute una acción, responde en JSON con este forma
 {{"action": "tipo_accion", "params": {{"param1": "valor"}}}}
 
 Tipos de acción disponibles:
-- open_app: {{"action": "open_app", "params": {{"name": "spotify"}}}}
-- close_app: {{"action": "close_app", "params": {{"name": "spotify"}}}}
-- run_command: {{"action": "run_command", "params": {{"command": "dir"}}}}
-- play_youtube: {{"action": "play_youtube", "params": {{"query": "lofi hip hop"}}}}
-- play_spotify: {{"action": "play_spotify", "params": {{"query": "rock playlist"}}}}
-- system_info: {{"action": "system_info", "params": {{}}}}
-- list_files: {{"action": "list_files", "params": {{"path": "C:\\Users\\FREYMAR\\Downloads"}}}}
-- create_folder: {{"action": "create_folder", "params": {{"path": "C:\\Users\\FREYMAR\\Desktop\\NuevaCarpeta"}}}}
-- create_file: {{"action": "create_file", "params": {{"path": "C:\\Users\\FREYMAR\\Desktop\\nota.txt", "content": "contenido aquí"}}}}
-- read_file: {{"action": "read_file", "params": {{"path": "C:\\Users\\FREYMAR\\Desktop\\nota.txt"}}}}
-- move_file: {{"action": "move_file", "params": {{"source": "ruta_origen", "destination": "ruta_destino"}}}}
-- copy_file: {{"action": "copy_file", "params": {{"source": "ruta_origen", "destination": "ruta_destino"}}}}
-- rename_file: {{"action": "rename_file", "params": {{"path": "ruta_archivo", "new_name": "nuevo_nombre.txt"}}}}
-- delete_file: {{"action": "delete_file", "params": {{"path": "ruta_archivo"}}}}
-- search_files: {{"action": "search_files", "params": {{"directory": "C:\\Users\\FREYMAR", "query": "nombre_buscar"}}}}
-- organize_folder: {{"action": "organize_folder", "params": {{"path": "C:\\Users\\FREYMAR\\Downloads"}}}}
-- open_file: {{"action": "open_file", "params": {{"path": "C:\\Users\\FREYMAR\\Desktop\\documento.pdf"}}}}
-- remember: {{"action": "remember", "params": {{"key": "color favorito", "value": "azul"}}}}
-- set_preference: {{"action": "set_preference", "params": {{"key": "idioma", "value": "español"}}}}
-- add_note: {{"action": "add_note", "params": {{"content": "Comprar leche mañana"}}}}
-- get_notes: {{"action": "get_notes", "params": {{}}}}
-- delete_note: {{"action": "delete_note", "params": {{"index": 1}}}}
-- save_project: {{"action": "save_project", "params": {{"name": "BT-7274", "description": "Asistente personal IA"}}}}
-- get_projects: {{"action": "get_projects", "params": {{}}}}
-- get_memory: {{"action": "get_memory", "params": {{}}}}
-- clear_memory: {{"action": "clear_memory", "params": {{}}}}
-- add_event: {{"action": "add_event", "params": {{"title": "Reunión", "date": "2025-01-15", "time": "14:30", "description": "Con el equipo"}}}}
-- get_events_today: {{"action": "get_events_today", "params": {{}}}}
-- get_events_date: {{"action": "get_events_date", "params": {{"date": "2025-01-15"}}}}
-- get_events_week: {{"action": "get_events_week", "params": {{}}}}
-- delete_event: {{"action": "delete_event", "params": {{"id": 1}}}}
-- add_task: {{"action": "add_task", "params": {{"title": "Hacer ejercicio", "priority": "normal"}}}}
-- get_tasks: {{"action": "get_tasks", "params": {{}}}}
-- complete_task: {{"action": "complete_task", "params": {{"id": 1}}}}
-- delete_task: {{"action": "delete_task", "params": {{"id": 1}}}}
-- add_reminder: {{"action": "add_reminder", "params": {{"message": "Llamar al doctor", "minutes": 30}}}}
-- add_reminder (hora): {{"action": "add_reminder", "params": {{"message": "Reunión", "time": "14:30"}}}}
-- get_reminders: {{"action": "get_reminders", "params": {{}}}}
-- daily_summary: {{"action": "daily_summary", "params": {{}}}}
-- get_weather: {{"action": "get_weather", "params": {{"city": "Caracas"}}}}
-- web_search: {{"action": "web_search", "params": {{"query": "qué es python"}}}}
-- open_url: {{"action": "open_url", "params": {{"url": "https://google.com"}}}}
-- search_google: {{"action": "search_google", "params": {{"query": "mejores juegos 2025"}}}}
-- get_news: {{"action": "get_news", "params": {{"category": "tecnología"}}}}
-- get_datetime: {{"action": "get_datetime", "params": {{}}}}
-- get_definition: {{"action": "get_definition", "params": {{"word": "resiliencia"}}}}
-- spotify_connect: {{"action": "spotify_connect", "params": {{}}}}
-- spotify_play: {{"action": "spotify_play", "params": {{"query": "Bohemian Rhapsody"}}}}
-- spotify_play (reanudar): {{"action": "spotify_play", "params": {{}}}}
-- spotify_pause: {{"action": "spotify_pause", "params": {{}}}}
-- spotify_next: {{"action": "spotify_next", "params": {{}}}}
-- spotify_previous: {{"action": "spotify_previous", "params": {{}}}}
-- spotify_volume: {{"action": "spotify_volume", "params": {{"level": 70}}}}
-- spotify_now_playing: {{"action": "spotify_now_playing", "params": {{}}}}
-- spotify_shuffle: {{"action": "spotify_shuffle", "params": {{"state": true}}}}
-- spotify_repeat: {{"action": "spotify_repeat", "params": {{"state": "track"}}}}
-- mouse_click: {{"action": "mouse_click", "params": {{"x": 500, "y": 300}}}}
-- mouse_double_click: {{"action": "mouse_double_click", "params": {{"x": 500, "y": 300}}}}
-- mouse_right_click: {{"action": "mouse_right_click", "params": {{"x": 500, "y": 300}}}}
-- mouse_move: {{"action": "mouse_move", "params": {{"x": 500, "y": 300}}}}
-- mouse_scroll: {{"action": "mouse_scroll", "params": {{"clicks": -3}}}}
-- type_text: {{"action": "type_text", "params": {{"text": "Hola mundo"}}}}
-- press_key: {{"action": "press_key", "params": {{"key": "enter"}}}}
-- hotkey: {{"action": "hotkey", "params": {{"keys": ["ctrl", "c"]}}}}
-- focus_window: {{"action": "focus_window", "params": {{"title": "Chrome"}}}}
-- minimize_window: {{"action": "minimize_window", "params": {{"title": "Chrome"}}}}
-- maximize_window: {{"action": "maximize_window", "params": {{"title": "Chrome"}}}}
-- list_windows: {{"action": "list_windows", "params": {{}}}}
-- copy_selection: {{"action": "copy_selection", "params": {{}}}}
-- paste_text: {{"action": "paste_text", "params": {{}}}}
-- select_all: {{"action": "select_all", "params": {{}}}}
-- undo: {{"action": "undo", "params": {{}}}}
-- browser_search: {{"action": "browser_search", "params": {{"query": "clima en Bogotá"}}}}
-- browser_go_to: {{"action": "browser_go_to", "params": {{"url": "https://youtube.com"}}}}
-- browser_click: {{"action": "browser_click", "params": {{"text": "Iniciar sesión"}}}}
-- browser_type: {{"action": "browser_type", "params": {{"text": "hola", "field_hint": "buscar"}}}}
-- browser_type_and_enter: {{"action": "browser_type_and_enter", "params": {{"text": "gatos graciosos"}}}}
-- browser_read_page: {{"action": "browser_read_page", "params": {{}}}}
-- browser_back: {{"action": "browser_back", "params": {{}}}}
-- browser_new_tab: {{"action": "browser_new_tab", "params": {{"url": "https://gmail.com"}}}}
-- browser_close_tab: {{"action": "browser_close_tab", "params": {{}}}}
-- browser_scroll: {{"action": "browser_scroll", "params": {{"direction": "down"}}}}
-- close_browser: {{"action": "close_browser", "params": {{}}}}
-- analyze_screen: {{"action": "analyze_screen", "params": {{"question": "¿qué error muestra esta ventana?"}}}}
-  Si el usuario no da una pregunta específica, deja "question" vacío y describirá la pantalla en general.
+"""
 
-INTERFAZ DE WIDGETS (puedes modificar el dashboard del usuario):
-- add_widget: {{"action": "add_widget", "params": {{"type": "weather", "x": 0, "y": 0, "w": 2, "h": 2}}}}
-  Tipos: clock, weather, notes, spotify, calendar, tasks
-- remove_widget: {{"action": "remove_widget", "params": {{"type": "weather"}}}}
-- move_widget: {{"action": "move_widget", "params": {{"type": "weather", "x": 2, "y": 0}}}}
-- resize_widget: {{"action": "resize_widget", "params": {{"type": "notes", "w": 3, "h": 2}}}}
-- set_theme: {{"action": "set_theme", "params": {{"accent": "verde", "mode": "dark"}}}}
-  Colores por nombre: verde, azul, rojo, naranja, morado, rosa, amarillo — o hex (#00ff88)
-- reset_layout: {{"action": "reset_layout", "params": {{}}}}
-
+_PROMPT_OUTRO = """
 Si es solo una respuesta conversacional, responde normalmente en texto plano.
 NUNCA mezcles JSON con texto. O es JSON puro, o es texto puro.
 """
+
+
+def get_system_prompt() -> str:
+    """
+    Arma el prompt completo del sistema. El catálogo de acciones (tools.py)
+    se importa aquí adentro, no arriba del archivo, para que brain.py y
+    tools.py puedan referenciarse sin depender del orden en que se cargan.
+    """
+    from tools import build_actions_prompt
+    return _PROMPT_INTRO + build_actions_prompt() + _PROMPT_OUTRO
 
 
 def _call_gemini(messages: list, system_prompt: str) -> str:
@@ -225,37 +144,33 @@ def _call_gemini(messages: list, system_prompt: str) -> str:
         return f"❌ Error inesperado: {e}"
 
 
-def _call_openrouter(messages: list, system_prompt: str) -> str:
-    """Llama a la API de OpenRouter con reintentos."""
-    if not OPENROUTER_API_KEY:
-        return "❌ Error: No hay API key de OpenRouter configurada. Edita config.py y agrega tu OPENROUTER_API_KEY."
-
-    url = "https://openrouter.ai/api/v1/chat/completions"
-
+def _call_openai_compatible(messages: list, system_prompt: str, url: str,
+                            model: str, api_key: str = "") -> str:
+    """
+    Llama a cualquier API con formato OpenAI (OpenRouter, Ollama, LM Studio,
+    vLLM...) con reintentos. Tener un solo cliente para todas significa que
+    agregar un proveedor nuevo es una línea en _call_ai, no una función más.
+    """
     formatted_messages = [{"role": "system", "content": system_prompt}]
     for msg in messages:
         formatted_messages.append({"role": msg["role"], "content": msg["content"]})
 
     payload = {
-        "model": OPENROUTER_MODEL,
+        "model": model,
         "messages": formatted_messages,
         "temperature": 0.7,
         "max_tokens": 1024,
     }
 
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
     data = json.dumps(payload).encode("utf-8")
 
     # Intentar hasta 3 veces
     for attempt in range(3):
-        req = urllib.request.Request(
-            url,
-            data=data,
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            },
-            method="POST"
-        )
+        req = urllib.request.Request(url, data=data, headers=headers, method="POST")
 
         try:
             with urllib.request.urlopen(req, timeout=60) as response:
@@ -290,7 +205,7 @@ def _call_openrouter(messages: list, system_prompt: str) -> str:
                     import time
                     time.sleep(2)
                     continue
-            return f"❌ Error de OpenRouter (HTTP {e.code}): {error_body[:200]}"
+            return f"❌ Error del proveedor de IA (HTTP {e.code}): {error_body[:200]}"
         except urllib.error.URLError as e:
             if attempt < 2:
                 import time
@@ -307,11 +222,38 @@ def _call_openrouter(messages: list, system_prompt: str) -> str:
     return "No pude obtener respuesta. Intenta de nuevo."
 
 
+def _call_ai(messages: list, system_prompt: str) -> str:
+    """
+    Punto ÚNICO de despacho al proveedor de IA configurado. Antes esta
+    decisión estaba copiada en 4 funciones distintas; ahora agregar un
+    proveedor nuevo es agregar una rama aquí y documentarla en .env.example.
+    """
+    if AI_PROVIDER == "gemini":
+        return _call_gemini(messages, system_prompt)
+    if AI_PROVIDER == "openrouter":
+        if not OPENROUTER_API_KEY:
+            return "❌ Error: No hay API key de OpenRouter configurada. Agrega OPENROUTER_API_KEY a tu .env."
+        return _call_openai_compatible(
+            messages, system_prompt,
+            url="https://openrouter.ai/api/v1/chat/completions",
+            model=OPENROUTER_MODEL, api_key=OPENROUTER_API_KEY,
+        )
+    if AI_PROVIDER == "ollama":
+        # Modelos locales gratis, sin internet. Requiere la app de Ollama
+        # abierta y un modelo descargado (ej: `ollama pull llama3.2`).
+        return _call_openai_compatible(
+            messages, system_prompt,
+            url=f"{OLLAMA_URL}/v1/chat/completions",
+            model=OLLAMA_MODEL,
+        )
+    return f"❌ Proveedor de IA no reconocido: {AI_PROVIDER}"
+
+
 def think(messages: list) -> str:
     """Envía los mensajes al proveedor de IA configurado y obtiene respuesta."""
     # Inyectar memoria en el prompt
     memory_context = get_memory_context()
-    full_system_prompt = SYSTEM_PROMPT
+    full_system_prompt = get_system_prompt()
     if memory_context:
         full_system_prompt += f"\n\nMEMORIA PERSISTENTE (información que ya sabes del usuario):\n{memory_context}"
 
@@ -330,12 +272,7 @@ def think(messages: list) -> str:
     except Exception:
         pass  # si la memoria semántica falla por cualquier motivo, seguimos sin ella
 
-    if AI_PROVIDER == "gemini":
-        return _call_gemini(messages, full_system_prompt)
-    elif AI_PROVIDER == "openrouter":
-        return _call_openrouter(messages, full_system_prompt)
-    else:
-        return f"❌ Proveedor de IA no reconocido: {AI_PROVIDER}"
+    return _call_ai(messages, full_system_prompt)
 
 
 def analyze_screen_with_ai(question: str = "") -> str:
@@ -398,15 +335,6 @@ def analyze_screen_with_ai(question: str = "") -> str:
         return f"❌ Error inesperado analizando pantalla: {e}"
 
 
-INFO_ACTIONS = {
-    "get_memory", "get_notes", "get_projects", "get_weather", "web_search",
-    "get_news", "get_definition", "get_tasks", "get_events_today",
-    "get_events_date", "get_events_week", "get_reminders", "daily_summary",
-    "list_files", "search_files", "read_file", "system_info", "get_datetime",
-    "spotify_now_playing", "browser_read_page", "list_windows",
-}
-
-
 def synthesize_answer(user_question: str, raw_data: str) -> str:
     """
     Convierte el resultado crudo de una acción informativa (memoria, clima,
@@ -428,10 +356,7 @@ def synthesize_answer(user_question: str, raw_data: str) -> str:
     plain_system = "Responde solo con la respuesta final en texto natural, sin JSON, sin explicaciones extra sobre lo que hiciste."
 
     try:
-        if AI_PROVIDER == "gemini":
-            return _call_gemini(messages, plain_system)
-        elif AI_PROVIDER == "openrouter":
-            return _call_openrouter(messages, plain_system)
+        return _call_ai(messages, plain_system)
     except Exception:
         pass
 
@@ -484,14 +409,9 @@ def think_step(
     messages = [{"role": "user", "content": step_prompt}]
 
     try:
-        if AI_PROVIDER == "gemini":
-            return _call_gemini(messages, SYSTEM_PROMPT)
-        elif AI_PROVIDER == "openrouter":
-            return _call_openrouter(messages, SYSTEM_PROMPT)
+        return _call_ai(messages, get_system_prompt())
     except Exception as e:
         return f"❌ Error pensando el paso: {e}"
-
-    return "❌ Proveedor de IA no soportado."
 
 
 def synthesize_plan_summary(original_request: str, steps: list[str], results: list[str]) -> str:
@@ -511,10 +431,7 @@ def synthesize_plan_summary(original_request: str, steps: list[str], results: li
     messages = [{"role": "user", "content": prompt}]
     plain_system = "Responde solo con el resumen final en texto natural, sin JSON, sin listas numeradas."
     try:
-        if AI_PROVIDER == "gemini":
-            return _call_gemini(messages, plain_system)
-        elif AI_PROVIDER == "openrouter":
-            return _call_openrouter(messages, plain_system)
+        return _call_ai(messages, plain_system)
     except Exception:
         pass
 

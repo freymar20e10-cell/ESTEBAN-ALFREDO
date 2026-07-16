@@ -4,6 +4,7 @@ Servidor que se hostea gratis en Render.
 Chat, voz, Spotify, notas, memoria, clima.
 """
 
+import hmac
 import os
 import json
 import time
@@ -31,6 +32,28 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID", "")
 SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET", "")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "")
+
+# Este servidor queda público en internet (Render). Sin esta clave, cualquiera
+# que encuentre la URL puede leer tu memoria personal y gastar tus créditos de
+# IA/Spotify/ElevenLabs. La app móvil (mobile/frontend/index.html) debe enviar
+# el mismo valor en el header X-BT-Key.
+MOBILE_ACCESS_KEY = os.getenv("MOBILE_ACCESS_KEY", "")
+
+
+@app.before_request
+def _require_access_key():
+    # La página estática (index.html, manifest, service worker) y el chequeo
+    # de salud quedan abiertos; el resto de la API exige la clave.
+    if not request.path.startswith("/api/") or request.path == "/api/status":
+        return None
+    if not MOBILE_ACCESS_KEY:
+        # Fail-closed: sin clave configurada no hay forma segura de verificar
+        # quién llama, así que no se ejecuta nada en vez de quedar abierto.
+        return jsonify({"error": "Servidor mal configurado: falta MOBILE_ACCESS_KEY."}), 503
+    provided = request.headers.get("X-BT-Key", "")
+    if not hmac.compare_digest(provided, MOBILE_ACCESS_KEY):
+        return jsonify({"error": "No autorizado."}), 401
+    return None
 
 OPENROUTER_MODEL = "nvidia/nemotron-3-super-120b-a12b:free"
 ASSISTANT_NAME = "BT-7274"

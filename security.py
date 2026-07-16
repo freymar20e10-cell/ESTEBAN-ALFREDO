@@ -18,6 +18,15 @@ def set_confirmation_backend(fn):
     _confirmation_backend = fn
 
 
+def _safe_print(text: str) -> None:
+    """print() que no revienta en consolas Windows con codepage viejo (cp1252)
+    cuando el texto trae emojis/acentos."""
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        print(text.encode("ascii", errors="replace").decode("ascii"))
+
+
 def is_dangerous_command(command: str) -> bool:
     command_lower = command.lower().strip()
     safe_patterns = ["taskkill /im", "taskkill /f /im"]
@@ -71,6 +80,44 @@ def validate_path(path: str) -> tuple[bool, str]:
         return False, f"Ruta inválida: {e}"
 
 
+def validate_public_url(url: str) -> tuple[bool, str]:
+    """
+    Solo permite navegar a sitios web públicos normales (http/https con un
+    dominio real). Bloquea esquemas peligrosos (file:, chrome:, javascript:)
+    y direcciones internas del equipo o de la red local — una página
+    maliciosa podría intentar que la IA navegue ahí para leer archivos
+    locales o paneles internos.
+    """
+    from urllib.parse import urlparse
+    import ipaddress
+
+    try:
+        parsed = urlparse(url.strip())
+    except ValueError:
+        return False, "URL inválida."
+
+    if parsed.scheme not in ("http", "https"):
+        return False, f"Solo se permite navegar a sitios web (http/https), no '{parsed.scheme}:'."
+
+    host = (parsed.hostname or "").lower()
+    if not host:
+        return False, "URL sin dominio."
+
+    if host in ("localhost", "0.0.0.0") or host.endswith(".local"):
+        return False, "No se permite navegar a direcciones internas del equipo."
+
+    try:
+        ip = ipaddress.ip_address(host)
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+            return False, "No se permite navegar a direcciones IP internas o reservadas."
+    except ValueError:
+        # No es una IP: debe parecer un dominio real (tener al menos un punto).
+        if "." not in host:
+            return False, f"'{host}' no parece un sitio web público."
+
+    return True, ""
+
+
 def request_confirmation(action_description: str) -> bool:
     """
     Pide confirmación. Prioridad:
@@ -88,14 +135,14 @@ def request_confirmation(action_description: str) -> bool:
 
     import sys
     if not sys.stdin.isatty():
-        print(f"  🚫 Acción bloqueada (sin backend de confirmación): {action_description}")
+        _safe_print(f"  🚫 Acción bloqueada (sin backend de confirmación): {action_description}")
         return False
 
     try:
-        print(f"\n⚠️  ACCIÓN SENSIBLE DETECTADA:")
-        print(f"   {action_description}")
-        response = input("   ¿Confirmas? (sí/no): ").strip().lower()
+        _safe_print("\n⚠️  ACCIÓN SENSIBLE DETECTADA:")
+        _safe_print(f"   {action_description}")
+        response = input("   ¿Confirmas? (si/no): ").strip().lower()
         return response in ["sí", "si", "s", "yes", "y"]
     except (EOFError, OSError):
-        print(f"  🚫 Acción bloqueada: {action_description}")
+        _safe_print(f"  🚫 Acción bloqueada: {action_description}")
         return False

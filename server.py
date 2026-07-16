@@ -31,49 +31,16 @@ from config import (
     WEBSOCKET_PORT, MAX_MESSAGE_CHARS, MAX_CONVERSATION_MESSAGES,
 )
 from agents import classify_agent
-from brain import (
-    think, analyze_screen_with_ai, synthesize_answer, INFO_ACTIONS,
-    think_step, synthesize_plan_summary,
-)
-from actions import open_app, close_app, run_command, play_youtube, play_spotify_search, get_system_info, log_action
+from brain import think, synthesize_answer, think_step, synthesize_plan_summary
+from actions import get_system_info
 from logger import log_error
-from file_manager import (
-    list_files, create_folder, create_file, read_file,
-    move_file, copy_file, rename_file, delete_file,
-    search_files, organize_folder, open_file
-)
-from shared_memory import (
-    remember, set_preference, add_note, get_notes,
-    delete_note, save_project, get_projects, get_all_facts, clear_memory
-)
-from scheduler import (
-    add_event, get_events_today, get_events_by_date, get_events_week,
-    delete_event, add_task, get_tasks, complete_task, delete_task,
-    add_reminder, get_reminders, get_daily_summary, restore_pending_reminders
-)
-from internet import get_weather, web_search, open_url, search_and_open, get_news, get_datetime, get_definition
-from spotify_control import (
-    authenticate as spotify_authenticate, spotify_play, spotify_pause,
-    spotify_next, spotify_previous, spotify_volume, spotify_now_playing,
-    spotify_shuffle, spotify_repeat
-)
+from shared_memory import get_notes, get_projects, get_all_facts
+from scheduler import get_tasks, get_daily_summary, restore_pending_reminders
+from spotify_control import authenticate as spotify_authenticate, spotify_now_playing
 from voice import speak
 from voice_live import start_voice_chat, stop_voice_chat, is_voice_active
-from computer_control import (
-    mouse_click, mouse_double_click, mouse_right_click, mouse_move, mouse_scroll,
-    type_text, press_key, hotkey,
-    focus_window, minimize_window, maximize_window, list_windows,
-    copy_selection, paste_text, select_all, undo,
-)
-from browser_control import (
-    browser_search, browser_go_to, browser_click, browser_type,
-    browser_type_and_enter, browser_read_page, browser_back,
-    browser_new_tab, browser_close_tab, browser_scroll, close_browser,
-)
-from ui_layout import (
-    get_layout, add_widget, remove_widget, move_widget,
-    resize_widget, set_theme, reset_layout, get_widget_data,
-)
+from ui_layout import get_layout, reset_layout, get_widget_data
+import tools
 
 
 # ═══════════════════════════════════════════
@@ -86,7 +53,7 @@ connected_clients = set()
 main_loop = None
 
 import concurrent.futures
-from security import request_confirmation, set_confirmation_backend
+from security import set_confirmation_backend
 
 # Confirmaciones pendientes: id -> Future que se resuelve cuando el usuario responde en la UI
 _pending_confirmations: dict[str, concurrent.futures.Future] = {}
@@ -139,154 +106,20 @@ def execute_action(action_data: dict) -> str:
     if not isinstance(params, dict):
         return "⚠️ Los parámetros de la acción no son válidos."
 
-    actions_map = {
-        "open_app": lambda: open_app(params.get("name", "")),
-        "close_app": lambda: close_app(params.get("name", "")),
-        "run_command": lambda: run_command(params.get("command", "")),
-        "play_youtube": lambda: play_youtube(params.get("query", "")),
-        "play_spotify": lambda: play_spotify_search(params.get("query", "")),
-        "system_info": lambda: get_system_info(),
-        "list_files": lambda: list_files(params.get("path", ".")),
-        "create_folder": lambda: create_folder(params.get("path", "")),
-        "create_file": lambda: create_file(params.get("path", ""), params.get("content", "")),
-        "read_file": lambda: read_file(params.get("path", "")),
-        "move_file": lambda: move_file(params.get("source", ""), params.get("destination", "")),
-        "copy_file": lambda: copy_file(params.get("source", ""), params.get("destination", "")),
-        "rename_file": lambda: rename_file(params.get("path", ""), params.get("new_name", "")),
-        "delete_file": lambda: delete_file(params.get("path", "")),
-        "search_files": lambda: search_files(params.get("directory", "."), params.get("query", "")),
-        "organize_folder": lambda: organize_folder(params.get("path", "")),
-        "open_file": lambda: open_file(params.get("path", "")),
-        "remember": lambda: remember(params.get("key", ""), params.get("value", "")),
-        "set_preference": lambda: set_preference(params.get("key", ""), params.get("value", "")),
-        "add_note": lambda: add_note(params.get("content", "")),
-        "get_notes": lambda: get_notes(),
-        "delete_note": lambda: delete_note(int(params.get("index", 0))),
-        "save_project": lambda: save_project(params.get("name", ""), params.get("description", "")),
-        "get_projects": lambda: get_projects(),
-        "get_memory": lambda: get_all_facts(),
-        "clear_memory": lambda: clear_memory(),
-        "add_event": lambda: add_event(params.get("title", ""), params.get("date", ""), params.get("time", ""), params.get("description", "")),
-        "get_events_today": lambda: get_events_today(),
-        "get_events_date": lambda: get_events_by_date(params.get("date", "")),
-        "get_events_week": lambda: get_events_week(),
-        "delete_event": lambda: delete_event(int(params.get("id", 0))),
-        "add_task": lambda: add_task(params.get("title", ""), params.get("priority", "normal")),
-        "get_tasks": lambda: get_tasks(params.get("show_completed", False)),
-        "complete_task": lambda: complete_task(int(params.get("id", 0))),
-        "delete_task": lambda: delete_task(int(params.get("id", 0))),
-        "add_reminder": lambda: add_reminder(params.get("message", ""), int(params.get("minutes", 0)), params.get("time", "")),
-        "get_reminders": lambda: get_reminders(),
-        "daily_summary": lambda: get_daily_summary(),
-        "get_weather": lambda: get_weather(params.get("city", "")),
-        "web_search": lambda: web_search(params.get("query", "")),
-        "open_url": lambda: open_url(params.get("url", "")),
-        "search_google": lambda: search_and_open(params.get("query", "")),
-        "get_news": lambda: get_news(params.get("category", "general")),
-        "get_datetime": lambda: get_datetime(),
-        "get_definition": lambda: get_definition(params.get("word", "")),
-        "spotify_connect": lambda: spotify_authenticate(),
-        "spotify_play": lambda: spotify_play(params.get("query", "")),
-        "spotify_pause": lambda: spotify_pause(),
-        "spotify_next": lambda: spotify_next(),
-        "spotify_previous": lambda: spotify_previous(),
-        "spotify_volume": lambda: spotify_volume(int(params.get("level", 50))),
-        "spotify_now_playing": lambda: spotify_now_playing(),
-        "spotify_shuffle": lambda: spotify_shuffle(params.get("state", True)),
-        "spotify_repeat": lambda: spotify_repeat(params.get("state", "off")),
-        # Control de mouse/teclado/ventanas
-        "mouse_click": lambda: mouse_click(int(params.get("x", 0)), int(params.get("y", 0))),
-        "mouse_double_click": lambda: mouse_double_click(int(params.get("x", 0)), int(params.get("y", 0))),
-        "mouse_right_click": lambda: mouse_right_click(int(params.get("x", 0)), int(params.get("y", 0))),
-        "mouse_move": lambda: mouse_move(int(params.get("x", 0)), int(params.get("y", 0))),
-        "mouse_scroll": lambda: mouse_scroll(int(params.get("clicks", -3))),
-        "type_text": lambda: type_text(params.get("text", "")),
-        "press_key": lambda: press_key(params.get("key", "")),
-        "hotkey": lambda: hotkey(*params.get("keys", [])),
-        "focus_window": lambda: focus_window(params.get("title", "")),
-        "minimize_window": lambda: minimize_window(params.get("title", "")),
-        "maximize_window": lambda: maximize_window(params.get("title", "")),
-        "list_windows": lambda: list_windows(),
-        "copy_selection": lambda: copy_selection(),
-        "paste_text": lambda: paste_text(),
-        "select_all": lambda: select_all(),
-        "undo": lambda: undo(),
-        # Control de navegador (Selenium)
-        "browser_search": lambda: browser_search(params.get("query", "")),
-        "browser_go_to": lambda: browser_go_to(params.get("url", "")),
-        "browser_click": lambda: browser_click(params.get("text", "")),
-        "browser_type": lambda: browser_type(params.get("text", ""), params.get("field_hint", "")),
-        "browser_type_and_enter": lambda: browser_type_and_enter(params.get("text", "")),
-        "browser_read_page": lambda: browser_read_page(),
-        "browser_back": lambda: browser_back(),
-        "browser_new_tab": lambda: browser_new_tab(params.get("url", "")),
-        "browser_close_tab": lambda: browser_close_tab(),
-        "browser_scroll": lambda: browser_scroll(params.get("direction", "down")),
-        "close_browser": lambda: close_browser(),
-        # Visión de pantalla
-        "analyze_screen": lambda: analyze_screen_with_ai(params.get("question", "")),
-        # UI / Widgets
-        "add_widget": lambda: add_widget(
-            params.get("type", params.get("widget", "")),
-            int(params.get("x", 0)),
-            int(params.get("y", 0)),
-            int(params.get("w", 2)),
-            int(params.get("h", 2)),
-        ),
-        "remove_widget": lambda: remove_widget(
-            params.get("id", params.get("widget_id", "")),
-            params.get("type", params.get("widget", "")),
-        ),
-        "move_widget": lambda: move_widget(
-            params.get("id", params.get("widget_id", "")),
-            params.get("type", params.get("widget", "")),
-            int(params.get("x", 0)),
-            int(params.get("y", 0)),
-        ),
-        "resize_widget": lambda: resize_widget(
-            params.get("id", params.get("widget_id", "")),
-            params.get("type", params.get("widget", "")),
-            int(params.get("w", 2)),
-            int(params.get("h", 2)),
-        ),
-        "set_theme": lambda: set_theme(
-            params.get("accent", params.get("color", "")),
-            params.get("mode", ""),
-        ),
-        "reset_layout": lambda: reset_layout(),
-    }
+    if action_type not in tools.TOOLS:
+        return f"⚠️ Acción desconocida: {action_type}"
 
-    UI_ACTIONS = {
-        "add_widget", "remove_widget", "move_widget",
-        "resize_widget", "set_theme", "reset_layout",
-    }
-
-    # Estas acciones borran información o producen una interacción que no se
-    # puede deshacer con fiabilidad. La IA puede proponerlas, pero no aprobarlas.
-    confirmation_required = {
-        "delete_note": "Eliminar una nota guardada",
-        "delete_event": "Eliminar un evento del calendario",
-        "delete_task": "Eliminar una tarea",
-        "clear_memory": "Borrar toda la memoria del asistente",
-        "close_browser": "Cerrar el navegador controlado",
-    }
-    if action_type in confirmation_required:
-        if not request_confirmation(confirmation_required[action_type]):
-            return "🚫 Acción cancelada por el usuario."
-
-    if action_type in actions_map:
-        try:
-            result = actions_map[action_type]()
-            if action_type in UI_ACTIONS:
-                broadcast_sync({"type": "layout_update", "layout": get_layout()})
-            return result
-        except (TypeError, ValueError) as error:
-            log_error("server", f"Parámetros inválidos para {action_type}: {error}")
-            return f"⚠️ Parámetros inválidos para la acción '{action_type}'."
-        except Exception as error:
-            log_error("server", f"Error ejecutando {action_type}: {error}")
-            return f"❌ No pude completar la acción '{action_type}'."
-    return f"⚠️ Acción desconocida: {action_type}"
+    try:
+        result, is_ui_action = tools.execute(action_type, params)
+        if is_ui_action:
+            broadcast_sync({"type": "layout_update", "layout": get_layout()})
+        return result
+    except (TypeError, ValueError) as error:
+        log_error("server", f"Parámetros inválidos para {action_type}: {error}")
+        return f"⚠️ Parámetros inválidos para la acción '{action_type}'."
+    except Exception as error:
+        log_error("server", f"Error ejecutando {action_type}: {error}")
+        return f"❌ No pude completar la acción '{action_type}'."
 
 
 def try_parse_action(response: str) -> dict | None:
@@ -418,7 +251,7 @@ def _process_message_core(user_input: str) -> str:
         result = execute_action(action)
 
         action_name = action.get("action", "")
-        if action_name in INFO_ACTIONS:
+        if action_name in tools.INFO_ACTIONS:
             final_response = synthesize_answer(user_input, result)
         else:
             final_response = result

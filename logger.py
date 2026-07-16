@@ -31,8 +31,15 @@ file_handler = logging.FileHandler(
 file_handler.setLevel(logging.DEBUG)
 file_handler.setFormatter(formatter)
 
-# Handler: consola (solo INFO+)
-console_handler = logging.StreamHandler(sys.stdout)
+# Handler: consola (solo INFO+). Las consolas de Windows con codepage viejo
+# (cp1252) no soportan emojis ni flechas — reconfiguramos el stream para que
+# reemplace esos caracteres en vez de lanzar un error de logging en pantalla.
+_console_stream = sys.stdout
+try:
+    _console_stream.reconfigure(errors="replace")
+except (AttributeError, ValueError):
+    pass
+console_handler = logging.StreamHandler(_console_stream)
 console_handler.setLevel(logging.INFO)
 console_formatter = logging.Formatter("  %(message)s")
 console_handler.setFormatter(console_formatter)

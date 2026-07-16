@@ -12,7 +12,7 @@ import re
 from datetime import datetime
 
 from config import APPS
-from security import request_confirmation
+from security import request_confirmation, is_dangerous_command, sanitize_command
 from logger import log_action as _log_action, log_error
 
 
@@ -102,9 +102,24 @@ def run_command(command: str) -> str:
         return "⚠️ No recibí ningún comando para ejecutar."
     if len(command) > 2_000:
         return "⚠️ El comando es demasiado largo."
+
+    # Si el comando encadena varios con &&, ;, etc., solo mostramos/ejecutamos
+    # la primera parte — así lo que el usuario aprueba es exactamente lo que
+    # se ejecuta, sin comandos extra escondidos después del primero.
+    sanitized = sanitize_command(command)
+    if sanitized != command:
+        log_error("actions", f"run_command: comando encadenado recortado. Original: {command!r} -> {sanitized!r}")
+        command = sanitized
+        if not command:
+            return "⚠️ No recibí ningún comando para ejecutar."
+
+    danger_prefix = ""
+    if is_dangerous_command(command):
+        danger_prefix = "⚠️ COMANDO POTENCIALMENTE DESTRUCTIVO ⚠️\n\n"
+
     # Un comando aparentemente inocuo puede incluir redirecciones, pipes o
     # ejecutar otro programa. La IA nunca debe tener aprobación implícita.
-    if not request_confirmation(f"Ejecutar comando:\n{command}"):
+    if not request_confirmation(f"{danger_prefix}Ejecutar comando:\n{command}"):
         return "🚫 Comando cancelado por el usuario."
 
     try:
