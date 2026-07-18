@@ -245,6 +245,19 @@ def get_memory_context(max_prefs: int = 12, max_facts: int = 10, max_projects: i
     return "\n\n".join(context_parts) if context_parts else ""
 
 
+def get_memory_snapshot() -> dict:
+    """Datos crudos de la memoria para el Panel de Control de la UI."""
+    memory = _load_memory()
+    return {
+        "preferences": memory.get("preferences", {}),
+        "facts": memory.get("facts", []),
+        "notes": memory.get("notes", []),
+        "projects": memory.get("projects", {}),
+        "created_at": memory.get("created_at"),
+        "last_session": memory.get("last_session"),
+    }
+
+
 def clear_memory() -> str:
     with _memory_lock:
         if MEMORY_FILE.exists():

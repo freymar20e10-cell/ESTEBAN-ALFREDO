@@ -34,7 +34,8 @@ let isQuitting = false;
 let serverAvailable = true;
 
 const PYTHON_SERVER_PORT = 8765;
-const HTTP_SERVER_PORT = 8080;
+// Debe coincidir con HTTP_PORT en config.py (8571 evita la inspección del antivirus en 8080)
+const HTTP_SERVER_PORT = 8571;
 
 function resolvePython() {
     const candidates = [

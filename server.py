@@ -434,6 +434,12 @@ async def handle_client(websocket):
 class BTHTTPRequestHandler(SimpleHTTPRequestHandler):
     """Sirve la UI estática y expone API JSON para widgets."""
 
+    # HTTP/1.1 mantiene la conexión abierta tras responder. Con HTTP/1.0 el
+    # servidor cerraba el socket apenas terminaba de escribir, y en Windows
+    # ese cierre descartaba el final de archivos grandes (three.min.js
+    # llegaba cortado a Chrome con ERR_CONNECTION_RESET).
+    protocol_version = "HTTP/1.1"
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(Path(__file__).parent / "ui"), **kwargs)
 
@@ -455,6 +461,27 @@ class BTHTTPRequestHandler(SimpleHTTPRequestHandler):
         if self.path.startswith("/api/widget/"):
             widget_type = self.path.split("/api/widget/", 1)[1].split("?", 1)[0]
             self._send_json(get_widget_data(widget_type))
+            return
+        # Endpoints del Panel de Control (solo lectura, solo localhost)
+        if self.path == "/api/memory":
+            from memory import get_memory_snapshot
+            self._send_json(get_memory_snapshot())
+            return
+        if self.path == "/api/system":
+            self._send_json({"text": get_system_info()})
+            return
+        if self.path == "/api/appinfo":
+            from config import AI_PROVIDER, GEMINI_MODEL, OPENROUTER_MODEL, OLLAMA_MODEL
+            model = {"gemini": GEMINI_MODEL, "openrouter": OPENROUTER_MODEL,
+                     "ollama": OLLAMA_MODEL}.get(AI_PROVIDER, "?")
+            self._send_json({
+                "name": ASSISTANT_NAME,
+                "user": USER_NAME,
+                "provider": AI_PROVIDER,
+                "model": model,
+                "tools": len(tools.TOOLS),
+                "voice_active": is_voice_active(),
+            })
             return
         return super().do_GET()
 

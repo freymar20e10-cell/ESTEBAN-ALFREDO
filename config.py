@@ -148,7 +148,10 @@ PROJECT_DIR = Path(__file__).parent
 DATA_DIR = PROJECT_DIR / "data"
 LOG_FILE = PROJECT_DIR / "bt7274_log.txt"
 HTTP_HOST = "127.0.0.1"
-HTTP_PORT = _env_int("BT7274_HTTP_PORT", 8080)
+# 8571 en vez de 8080: el 8080 es un puerto clásico de proxy que los
+# antivirus (Avast) interceptan, y cortaban la descarga de archivos grandes
+# de la UI (three.min.js). Un puerto poco común no sufre esa inspección.
+HTTP_PORT = _env_int("BT7274_HTTP_PORT", 8571)
 WEBSOCKET_PORT = _env_int("BT7274_WEBSOCKET_PORT", 8765)
 MAX_MESSAGE_CHARS = _env_int("BT7274_MAX_MESSAGE_CHARS", 10_000, minimum=100, maximum=100_000)
 MAX_CONVERSATION_MESSAGES = _env_int("BT7274_MAX_CONVERSATION_MESSAGES", 12, minimum=4, maximum=50)
