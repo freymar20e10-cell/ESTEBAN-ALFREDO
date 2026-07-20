@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>JARVIS — Núcleo</title>
-<script src="vendor/three.min.js"></script>
+<script src="vendor/jarvis-core-engine.js"></script>
 <style>
 /* ═══════════════ TOKENS ═══════════════ */
 :root{
@@ -368,6 +368,7 @@ body.titlebar-show #cc{top:var(--titlebar-h)}
     <div id="cc-brand"><h2>JARVIS</h2><p>Command center</p></div>
     <nav id="cc-nav">
       <button class="cc-nav-btn active" data-tab="mando">▦ Centro de mando</button>
+      <button class="cc-nav-btn" data-tab="nucleo">✹ Núcleo</button>
       <button class="cc-nav-btn" data-tab="memoria">◎ Memoria</button>
       <button class="cc-nav-btn" data-tab="inteligencia">✦ Inteligencia</button>
       <button class="cc-nav-btn" data-tab="registro">▤ Registro</button>
@@ -398,208 +399,35 @@ const STATES = {
 };
 let currentState = 'desconectado';
 
-/* ════════════════ NÚCLEO — nebulosa de partículas ════════════════ */
-const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-const cores = navigator.hardwareConcurrency || 4;
-const CLOUD_N = reducedMotion ? 1200 : (cores <= 4 ? 2400 : cores <= 8 ? 4200 : 5600);
-const RING_N  = reducedMotion ? 400  : (cores <= 4 ? 700  : 1300);
-const FRAME_INTERVAL = cores <= 4 ? 1000 / 30 : 1000 / 60;
-
-const mount = $('core-canvas');
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(52, innerWidth / innerHeight, 0.1, 100);
-camera.position.z = 7.2;
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-renderer.setSize(innerWidth, innerHeight);
-renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
-mount.appendChild(renderer.domElement);
-
-// sprite suave para partículas y brillos
-function makeGlowTex(stops) {
-  const c = document.createElement('canvas'); c.width = c.height = 128;
-  const x = c.getContext('2d');
-  const g = x.createRadialGradient(64, 64, 0, 64, 64, 64);
-  stops.forEach(([o, col]) => g.addColorStop(o, col));
-  x.fillStyle = g; x.fillRect(0, 0, 128, 128);
-  const t = new THREE.Texture(c); t.needsUpdate = true; return t;
+/* ════════════════ NÚCLEO — JARVIS Core Engine ════════════════ */
+// El motor visual vive en core-engine/ (React Three Fiber + GLSL puro GPU)
+// y se compila a vendor/jarvis-core-engine.js. Aquí solo se monta y dirige.
+let core = null;
+const CORE_STATE_MAP = {
+  escuchando: 'esperando',      // en reposo el núcleo respira lento
+  pensando: 'pensando',
+  listo: 'actualizando',
+  error: 'error',
+  desconectado: 'desconectado',
+};
+function applyCoreState() {
+  if (!core) return;
+  // con la voz activa, el reposo se convierte en pulso de escucha real
+  const target = (voiceActive && currentState === 'escuchando')
+    ? 'escuchando'
+    : (CORE_STATE_MAP[currentState] || 'esperando');
+  core.setState(target);
 }
-const dotTex  = makeGlowTex([[0,'rgba(255,255,255,1)'],[0.3,'rgba(255,255,255,.8)'],[0.6,'rgba(255,255,255,.2)'],[1,'rgba(255,255,255,0)']]);
-const glowTex = makeGlowTex([[0,'rgba(255,255,255,1)'],[0.25,'rgba(255,255,255,.5)'],[0.6,'rgba(255,255,255,.12)'],[1,'rgba(255,255,255,0)']]);
-
-const pivot = new THREE.Group();
-scene.add(pivot);
-
-// ── nube: densa en el centro, halo disperso alrededor ──
-function buildCloud(n) {
-  const pos = new Float32Array(n * 3);
-  const size = new Float32Array(n);
-  const seed = new Float32Array(n);
-  const heat = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    const inner = Math.random() < 0.58;
-    let r;
-    if (inner) r = 0.1 + Math.pow(Math.random(), 2.6) * 1.15;
-    else       r = 0.9 + Math.pow(Math.random(), 1.6) * 2.6;
-    const th = Math.random() * Math.PI * 2;
-    const ph = Math.acos(2 * Math.random() - 1);
-    pos[i*3]   = r * Math.sin(ph) * Math.cos(th);
-    pos[i*3+1] = r * Math.cos(ph) * 0.72;          // nebulosa achatada
-    pos[i*3+2] = r * Math.sin(ph) * Math.sin(th);
-    size[i] = inner ? (2.2 + Math.random() * 3.4) : (1.4 + Math.random() * 3.0);
-    seed[i] = Math.random();
-    heat[i] = Math.max(0, 1 - r / 1.15);            // cercanía al centro = más blanco
-  }
-  return { pos, size, seed, heat };
-}
-// ── anillo orbital elíptico ──
-function buildRing(n) {
-  const pos = new Float32Array(n * 3);
-  const size = new Float32Array(n);
-  const seed = new Float32Array(n);
-  const heat = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    const a = Math.random() * Math.PI * 2;
-    const r = 3.3 + Math.random() * 0.85 + (Math.random() < 0.12 ? Math.random() * 0.5 : 0);
-    pos[i*3]   = Math.cos(a) * r;
-    pos[i*3+1] = (Math.random() - 0.5) * 0.07;
-    pos[i*3+2] = Math.sin(a) * r * 0.94;
-    size[i] = 0.9 + Math.random() * 1.7;
-    seed[i] = Math.random();
-    heat[i] = 0;
-  }
-  return { pos, size, seed, heat };
-}
-
-const particleVert = `
-attribute float aSize; attribute float aSeed; attribute float aHeat;
-uniform float uTime; uniform float uPulse; uniform float uPixelRatio; uniform float uDrift;
-varying float vHeat; varying float vTw;
-void main(){
-  vHeat = aHeat;
-  vec3 p = position;
-  float ang = uTime * uDrift * (0.15 + aSeed * 0.5);
-  float c = cos(ang), s = sin(ang);
-  p = vec3(c*p.x - s*p.z, p.y, s*p.x + c*p.z);
-  p += 0.05 * vec3(
-    sin(uTime*(0.4+aSeed)+aSeed*7.0),
-    cos(uTime*(0.3+aSeed)+aSeed*3.0),
-    sin(uTime*(0.5+aSeed)+aSeed*5.0));
-  vec4 mv = modelViewMatrix * vec4(p * uPulse, 1.0);
-  gl_PointSize = aSize * uPixelRatio * (46.0 / -mv.z);
-  vTw = 0.7 + 0.3 * sin(uTime*(0.8+aSeed*2.2)+aSeed*6.28);
-  gl_Position = projectionMatrix * mv;
-}`;
-const particleFrag = `
-uniform vec3 uColor; uniform sampler2D uMap; uniform float uAlpha;
-varying float vHeat; varying float vTw;
-void main(){
-  vec4 tex = texture2D(uMap, gl_PointCoord);
-  vec3 col = mix(uColor, vec3(1.0), vHeat * 0.9);
-  gl_FragColor = vec4(col, tex.a * vTw * uAlpha * (0.5 + vHeat * 0.5));
-}`;
-
-function makeParticles(data, drift, alpha) {
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(data.pos, 3));
-  geo.setAttribute('aSize', new THREE.BufferAttribute(data.size, 1));
-  geo.setAttribute('aSeed', new THREE.BufferAttribute(data.seed, 1));
-  geo.setAttribute('aHeat', new THREE.BufferAttribute(data.heat, 1));
-  const mat = new THREE.ShaderMaterial({
-    uniforms: {
-      uTime: { value: 0 }, uPulse: { value: 1 },
-      uPixelRatio: { value: Math.min(devicePixelRatio, 1.5) },
-      uColor: { value: new THREE.Color(0.24, 0.86, 1.0) },
-      uMap: { value: dotTex }, uAlpha: { value: alpha }, uDrift: { value: drift },
-    },
-    vertexShader: particleVert, fragmentShader: particleFrag,
-    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-  });
-  return new THREE.Points(geo, mat);
-}
-
-const cloud = makeParticles(buildCloud(CLOUD_N), reducedMotion ? 0 : 0.10, 0.95);
-pivot.add(cloud);
-
-const ringGroup = new THREE.Group();
-ringGroup.rotation.x = 1.22;          // casi de canto: elipse ancha
-ringGroup.rotation.z = 0.10;
-const ring = makeParticles(buildRing(RING_N), reducedMotion ? 0 : -0.22, 0.5);
-ringGroup.add(ring);
-pivot.add(ringGroup);
-
-// brillo central en capas
-function makeSprite(tex, scale, opacity, color) {
-  const m = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity, color, blending: THREE.AdditiveBlending, depthWrite: false });
-  const s = new THREE.Sprite(m); s.scale.set(scale, scale, 1); return s;
-}
-const glowHot  = makeSprite(glowTex, 1.15, 0.95, new THREE.Color(1, 1, 1));
-const glowMid  = makeSprite(glowTex, 2.9,  0.5,  new THREE.Color(0.35, 0.85, 1));
-const glowFar  = makeSprite(glowTex, 6.2,  0.16, new THREE.Color(0.2, 0.7, 1));
-pivot.add(glowHot, glowMid, glowFar);
-
-// rotación con el mouse
-let rotX = 0.12, rotY = 0, velX = 0, velY = 0, dragging = false, lpx = 0, lpy = 0, lmt = 0;
-const cnv = renderer.domElement;
-cnv.style.touchAction = 'none'; cnv.style.cursor = 'grab';
-cnv.addEventListener('pointerdown', e => { dragging = true; lpx = e.clientX; lpy = e.clientY; velX = velY = 0; cnv.style.cursor = 'grabbing'; cnv.setPointerCapture(e.pointerId); });
-cnv.addEventListener('pointermove', e => {
-  if (!dragging) return;
-  const dx = e.clientX - lpx, dy = e.clientY - lpy; lpx = e.clientX; lpy = e.clientY;
-  rotY += dx * 0.006; rotX += dy * 0.006;
-  rotX = Math.max(-1.2, Math.min(1.2, rotX));
-  velY = dx * 0.006; velX = dy * 0.006; lmt = performance.now();
+JarvisCoreEngine.mount($('core-canvas'), {
+  particleCount: (navigator.hardwareConcurrency || 4) <= 4 ? 7000 : 12000,
+  shape: 'nebula',
+  color: '#37d8ff',
+}).then(handle => {
+  core = handle;
+  window.JarvisCore = handle;   // accesible para consola y automatización
+  applyCoreState();
 });
-const endDrag = e => { dragging = false; cnv.style.cursor = 'grab'; try { cnv.releasePointerCapture(e.pointerId); } catch {} if (performance.now() - lmt > 80) velX = velY = 0; };
-cnv.addEventListener('pointerup', endDrag);
-cnv.addEventListener('pointercancel', endDrag);
 
-const curColor = new THREE.Color(...STATES[currentState].color);
-const clock = new THREE.Clock();
-let lastFrame = 0;
-
-function tick(ft = 0) {
-  requestAnimationFrame(tick);
-  if (document.hidden || ft - lastFrame < FRAME_INTERVAL) return;
-  lastFrame = ft;
-  const t = clock.getElapsedTime();
-  const st = STATES[currentState];
-
-  curColor.lerp(new THREE.Color(...st.color), 0.045);
-  const pulse = 1 + Math.sin(t * st.breath) * st.amp;
-
-  [cloud, ring].forEach(pts => {
-    pts.material.uniforms.uTime.value = t;
-    pts.material.uniforms.uPulse.value = pulse;
-    pts.material.uniforms.uColor.value.copy(curColor);
-  });
-
-  const gp = 0.9 + Math.sin(t * st.breath * 1.3) * 0.12 + st.energy * 0.15;
-  glowHot.material.opacity = 0.85 * gp;
-  glowMid.material.opacity = 0.45 * gp;
-  glowMid.material.color.copy(curColor).lerp(new THREE.Color(1, 1, 1), 0.25);
-  glowFar.material.color.copy(curColor);
-  glowFar.material.opacity = 0.15 + st.energy * 0.06;
-  glowHot.scale.setScalar(1.05 + Math.sin(t * st.breath) * 0.08 + st.energy * 0.2);
-  glowMid.scale.setScalar(2.8 + Math.sin(t * st.breath * 0.8) * 0.2);
-
-  if (!dragging) {
-    rotY += velY; rotX += velX;
-    velX *= 0.94; velY *= 0.94;
-    rotX = Math.max(-1.2, Math.min(1.2, rotX));
-    if (Math.abs(velX) + Math.abs(velY) < 0.0005) rotY += 0.0009 + st.energy * 0.0012;
-  }
-  pivot.rotation.y = rotY;
-  pivot.rotation.x = rotX;
-
-  renderer.render(scene, camera);
-}
-requestAnimationFrame(tick);
-
-addEventListener('resize', () => {
-  camera.aspect = innerWidth / innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight);
-});
 
 /* ════════════════ ESTADO DE LA UI ════════════════ */
 function setState(s) {
@@ -609,6 +437,7 @@ function setState(s) {
   document.documentElement.style.setProperty('--accent', `rgb(${r},${g},${b})`);
   $('state-label').textContent = st.label;
   $('state-chip').classList.toggle('off', s === 'desconectado' || s === 'error');
+  applyCoreState();
 }
 
 /* ════════════════ REGISTRO COGNITIVO ════════════════ */
@@ -776,6 +605,7 @@ function setVoiceUI(active) {
   $('voice-btn-label').textContent = active ? 'Voz encendida' : 'Voz apagada';
   $('voice-card').classList.toggle('active', active);
   $('voice-state').textContent = active ? 'Escuchando' : 'En espera';
+  applyCoreState();
 }
 $('voice-btn').addEventListener('click', () => {
   if (!ws || ws.readyState !== WebSocket.OPEN) { toast('Sin conexión con el núcleo'); return; }
@@ -881,7 +711,17 @@ document.addEventListener('click', e => { if (!$('sugg').contains(e.target) && e
 document.querySelectorAll('#sugg button').forEach(b => b.addEventListener('click', () => { $('sugg').classList.remove('show'); sendMessage(b.textContent); }));
 
 /* ════════════════ PANEL DE CONTROL ════════════════ */
-const CC_TITLES = { mando: 'Centro de mando', memoria: 'Memoria', inteligencia: 'Inteligencia', registro: 'Registro', sistema: 'Sistema' };
+const CC_TITLES = { mando: 'Centro de mando', nucleo: 'Núcleo', memoria: 'Memoria', inteligencia: 'Inteligencia', registro: 'Registro', sistema: 'Sistema' };
+
+// Formas del motor con nombre legible. Cambiar de forma cierra el panel
+// para que la transición se vea en pantalla completa.
+const CORE_SHAPES = [
+  ['nebula', 'Nebulosa'], ['sphere', 'Esfera'], ['cube', 'Cubo'],
+  ['torus', 'Toroide'], ['ring', 'Anillos'], ['cylinder', 'Cilindro'],
+  ['cone', 'Cono'], ['galaxy', 'Galaxia'], ['dna', 'ADN'],
+  ['blackhole', 'Agujero negro'],
+];
+const CORE_TEXTS = ['JARVIS', 'ONLINE', 'HELLO', 'AI'];
 
 // Capacidades REALES del backend (agrupación del catálogo tools.py)
 const CAPS = [
@@ -916,13 +756,19 @@ async function fetchJSON(url) {
 }
 function esc(s) { const d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; }
 
+let ccRenderToken = 0;
 async function ccRender(tab) {
+  // guardia anti-carrera: si el usuario cambia de pestaña mientras esta
+  // aún espera datos, la vieja NO debe sobrescribir a la nueva
+  const token = ++ccRenderToken;
+  const stale = () => token !== ccRenderToken;
   $('cc-title').textContent = CC_TITLES[tab];
   const c = $('cc-content');
 
   if (tab === 'mando') {
     const info = await fetchJSON('/api/appinfo');
     const mem = await fetchJSON('/api/memory');
+    if (stale()) return;
     const nFacts = mem ? (mem.facts || []).length + Object.keys(mem.preferences || {}).length : '—';
     const nNotes = mem ? (mem.notes || []).length : '—';
     c.innerHTML = `
@@ -939,9 +785,46 @@ async function ccRender(tab) {
       </div>`;
   }
 
+  else if (tab === 'nucleo') {
+    const current = core ? core.getShape() : 'nebula';
+    c.innerHTML = `
+      <div class="cc-hero">
+        <div class="k">Motor visual</div>
+        <h3>El núcleo puede tomar cualquier forma</h3>
+        <p>Las ${core ? 'partículas' : 'partículas (motor cargando…)'} nunca desaparecen: fluyen hacia la nueva forma por un campo de ruido orgánico, todo calculado en la GPU. Elige una forma y observa la transición.</p>
+      </div>
+      <div class="kv-block"><div class="bt">Formas</div>
+        <div class="cc-grid" id="shape-grid">${CORE_SHAPES.map(([id, label]) => `
+          <div class="cap-card shape-pick" data-shape="${id}" role="button" tabindex="0" style="cursor:pointer${id === current ? ';border-color:var(--line-strong);background:var(--cyan-soft)' : ''}">
+            <div class="name">${label}</div>
+            <div class="desc">${id === current ? 'Forma actual' : 'Clic para transformar'}</div>
+          </div>`).join('')}
+        </div>
+      </div>
+      <div class="kv-block"><div class="bt">Texto en partículas</div>
+        <div class="cc-grid">${CORE_TEXTS.map(t => `
+          <div class="cap-card shape-pick" data-shape="text" data-text="${t}" role="button" tabindex="0" style="cursor:pointer">
+            <div class="name">"${t}"</div>
+            <div class="desc">Formar la palabra con partículas</div>
+          </div>`).join('')}
+        </div>
+      </div>`;
+    c.querySelectorAll('.shape-pick').forEach(el => {
+      el.addEventListener('click', () => {
+        if (!core) return;
+        const shape = el.dataset.shape;
+        const text = el.dataset.text;
+        core.setShape(shape, text ? { text } : undefined);
+        addLog('NÚCLEO', 'c', `Morphing → ${text ? `texto "${text}"` : shape}`, { hl: true });
+        ccClose();   // cerrar para ver la transición en pantalla completa
+      });
+    });
+  }
+
   else if (tab === 'memoria') {
     c.innerHTML = '<div class="cc-empty">Consultando memoria…</div>';
     const mem = await fetchJSON('/api/memory');
+    if (stale()) return;
     if (!mem) { c.innerHTML = '<div class="cc-empty">No pude leer la memoria (¿servidor activo?).</div>'; return; }
     const prefRows = Object.entries(mem.preferences || {}).map(([k, v]) =>
       `<div class="kv-row"><span class="kk">${esc(k)}</span><span class="vv">${esc(typeof v === 'object' ? v.value : v)}</span></div>`).join('') || '<div class="cc-empty">Sin preferencias guardadas.</div>';
@@ -985,6 +868,7 @@ async function ccRender(tab) {
   else if (tab === 'sistema') {
     c.innerHTML = '<div class="cc-empty">Consultando sistema…</div>';
     const [sys, info] = await Promise.all([fetchJSON('/api/system'), fetchJSON('/api/appinfo')]);
+    if (stale()) return;
     const sysRows = sys ? sys.text.split('\n').filter(Boolean).map(l =>
       `<div class="kv-row"><span class="vv" style="text-align:left">${esc(l)}</span></div>`).join('') : '<div class="cc-empty">Sin datos.</div>';
     c.innerHTML = `

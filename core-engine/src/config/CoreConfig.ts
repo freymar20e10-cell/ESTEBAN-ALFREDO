@@ -1,0 +1,74 @@
+/**
+ * CoreConfig — todos los parámetros del núcleo en un solo lugar.
+ * Nada está "quemado" en el motor: quien monta el núcleo puede ajustar
+ * cualquier valor aquí sin tocar shaders ni sistemas internos.
+ */
+
+export type ShapeName = string;
+
+export interface CoreConfig {
+  /** Cantidad de partículas. Se fija al montar (los buffers se crean una vez). */
+  particleCount: number;
+  /** Tamaño base de cada partícula (multiplicador). */
+  particleSize: number;
+  /** Velocidad global del flujo orgánico (multiplica el tiempo del ruido). */
+  particleSpeed: number;
+  /** Rotación automática del núcleo completo (rad/seg aprox). */
+  rotationSpeed: number;
+  /** Velocidad de la respiración/pulso. */
+  pulseSpeed: number;
+  /** Amplitud de la respiración/pulso (0..1). */
+  pulseIntensity: number;
+  /** Escala espacial del ruido (más alto = detalles más finos). */
+  noiseScale: number;
+  /** Fuerza del desplazamiento por curl noise. */
+  noiseStrength: number;
+  /** Intensidad del brillo del centro y de las partículas calientes (0..1). */
+  glow: number;
+  /** Opacidad global de las partículas (0..1). */
+  opacity: number;
+  /** Radio base del núcleo en unidades de mundo. */
+  coreRadius: number;
+  /** Velocidad de las transiciones (morphing y cambios de estado). 1 = ~1s. */
+  transitionSpeed: number;
+  /** Color base (hex). Los estados pueden teñirlo temporalmente. */
+  color: string;
+  /** Color del centro caliente. */
+  hotColor: string;
+  /** Forma inicial. */
+  shape: ShapeName;
+  /** Animación en reposo: 'breath' respira, 'none' queda estático. */
+  idleAnimation: "breath" | "none";
+  /** Influencia del mouse sobre las partículas (0 = ninguna). Sutil por diseño. */
+  mouseInfluence: number;
+  /** Desorden de llegada en el morphing (0 = todas a la vez, 1 = muy escalonado). */
+  morphStagger: number;
+  /** Límite de devicePixelRatio (rendimiento). */
+  maxPixelRatio: number;
+}
+
+export const DEFAULT_CONFIG: CoreConfig = {
+  particleCount: 12000,
+  particleSize: 1.0,
+  particleSpeed: 1.0,
+  rotationSpeed: 0.05,
+  pulseSpeed: 0.9,
+  pulseIntensity: 0.05,
+  noiseScale: 0.55,
+  noiseStrength: 0.16,
+  glow: 0.85,
+  opacity: 0.9,
+  coreRadius: 2.1,
+  transitionSpeed: 0.9,
+  color: "#37d8ff",
+  hotColor: "#eaffff",
+  shape: "nebula",
+  idleAnimation: "breath",
+  mouseInfluence: 0.35,
+  morphStagger: 0.55,
+  maxPixelRatio: 1.5,
+};
+
+export function mergeConfig(partial?: Partial<CoreConfig>): CoreConfig {
+  return { ...DEFAULT_CONFIG, ...(partial ?? {}) };
+}
