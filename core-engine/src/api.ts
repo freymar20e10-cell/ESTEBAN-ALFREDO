@@ -21,13 +21,42 @@ export interface JarvisCoreHandle {
   setShape(name: string, ctx?: Partial<ShapeContext>): Promise<void>;
   setState(name: string): void;
   setAudioLevel(level: number): void;
+  /** Color base del núcleo (hex). Los estados con color propio lo tiñen temporalmente. */
+  setColor(hex: string): void;
+  /** Energía extra 0..1 (sube brillo, rotación y turbulencia). */
+  setEnergy(v: number): void;
+  /** Brillo de las partículas 0..~1.5. */
+  setGlow(v: number): void;
+  /** Intensidad del bloom (resplandor). 0 = apagado. */
+  setBloom(v: number): void;
+  /** Umbral del bloom 0..1: cuánto tiene que brillar algo para florecer. */
+  setBloomThreshold(v: number): void;
+  /** Fuerza del ruido/turbulencia orgánica. */
+  setNoiseIntensity(v: number): void;
+  /** Velocidad de las transiciones de forma/estado (1 ≈ 1s). */
+  setMorphSpeed(v: number): void;
+  /** Rotación automática del núcleo (rad/seg aprox). */
+  setRotation(v: number): void;
+  /** Radio/escala del núcleo en unidades de mundo. */
+  setScale(v: number): void;
+  /** Tamaño base de cada partícula. */
+  setParticleSize(v: number): void;
+  /** Aplica varios parámetros de configuración de golpe. */
+  setConfig(patch: Partial<CoreConfig>): void;
+  /** Congela la simulación (sigue renderizando el último fotograma). */
+  pause(): void;
+  /** Reanuda la simulación tras pause(). */
+  resume(): void;
   getShape(): string;
   getState(): CoreStateName;
+  getConfig(): Readonly<CoreConfig>;
   listShapes(): string[];
   listStates(): string[];
   registerShape(name: string, generator: ShapeGenerator): void;
   dispose(): void;
 }
+
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 export async function mount(element: HTMLElement, userConfig?: Partial<CoreConfig>): Promise<JarvisCoreHandle> {
   const config: CoreConfig = mergeConfig(userConfig);
@@ -77,8 +106,24 @@ export async function mount(element: HTMLElement, userConfig?: Partial<CoreConfi
       else { pendingState = name; ensureFlush(); }
     },
     setAudioLevel(level) { ref.current?.setAudioLevel(level); },
+    // Estos setters mutan el MISMO objeto config que el motor lee cada
+    // fotograma: el cambio se ve al instante, sin recrear nada.
+    setColor(hex) { config.color = hex; },
+    setEnergy(v) { config.energyBias = clamp(v, 0, 1); },
+    setGlow(v) { config.glow = Math.max(0, v); },
+    setBloom(v) { config.bloom = Math.max(0, v); },
+    setBloomThreshold(v) { config.bloomThreshold = clamp(v, 0, 1); },
+    setNoiseIntensity(v) { config.noiseStrength = Math.max(0, v); },
+    setMorphSpeed(v) { config.transitionSpeed = Math.max(0.05, v); },
+    setRotation(v) { config.rotationSpeed = v; },
+    setScale(v) { config.coreRadius = Math.max(0.2, v); },
+    setParticleSize(v) { config.particleSize = Math.max(0.1, v); },
+    setConfig(patch) { Object.assign(config, patch); },
+    pause() { config.paused = true; },
+    resume() { config.paused = false; },
     getShape() { return ref.current?.getShape() ?? pendingShape?.name ?? config.shape; },
     getState() { return ref.current?.getState() ?? pendingState ?? "esperando"; },
+    getConfig() { return { ...config }; },
     listShapes,
     listStates() { return Object.keys(CORE_STATES); },
     registerShape,

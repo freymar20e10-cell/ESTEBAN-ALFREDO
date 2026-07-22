@@ -45,6 +45,16 @@ export interface CoreConfig {
   morphStagger: number;
   /** Límite de devicePixelRatio (rendimiento). */
   maxPixelRatio: number;
+  /** Intensidad del bloom (resplandor cinemático). 0 = apagado. Suave por diseño. */
+  bloom: number;
+  /** Umbral de luminancia del bloom: solo brilla lo más brillante (0..1). */
+  bloomThreshold: number;
+  /** Radio de difusión del bloom (0..1). */
+  bloomRadius: number;
+  /** Energía extra sumada a la del estado (0..1). La API la ajusta en vivo. */
+  energyBias: number;
+  /** Si true, congela la simulación (pause/resume de la API). */
+  paused: boolean;
 }
 
 export const DEFAULT_CONFIG: CoreConfig = {
@@ -67,6 +77,11 @@ export const DEFAULT_CONFIG: CoreConfig = {
   mouseInfluence: 0.35,
   morphStagger: 0.55,
   maxPixelRatio: 1.5,
+  bloom: 0.55,          // resplandor sutil: da vida sin encandilar
+  bloomThreshold: 0.35, // solo el centro caliente florece
+  bloomRadius: 0.6,
+  energyBias: 0,
+  paused: false,
 };
 
 export function mergeConfig(partial?: Partial<CoreConfig>): CoreConfig {

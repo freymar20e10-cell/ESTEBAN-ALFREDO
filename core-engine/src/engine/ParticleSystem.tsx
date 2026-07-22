@@ -120,6 +120,9 @@ export const ParticleSystem = forwardRef<ParticleSystemHandle, Props>(function P
 
   useFrame((_, delta) => {
     const cfg = configRef.current;
+    // pause(): congela la simulación (los uniforms no avanzan) pero el
+    // post-procesado sigue renderizando el último fotograma estable.
+    if (cfg.paused) return;
     const t = clock.getElapsedTime();
     const u = material.uniforms;
     anim.setConfig(cfg);
@@ -183,7 +186,9 @@ function GlowCore({ anim, morph, config }: {
     };
     const horizonMat = new THREE.MeshBasicMaterial({ color: "#000206", transparent: true, opacity: 0 });
     const horizon = new THREE.Mesh(new THREE.SphereGeometry(0.7, 32, 32), horizonMat);
-    return { hot: sprite(1.1, 0.9, "#ffffff"), mid: sprite(2.8, 0.5, "#56d9ff"), far: sprite(6.0, 0.15, "#2fa8e6"), horizon };
+    // Resplandor central discreto: una brasa, no un foco. Las partículas
+    // calientes del centro ya aportan la mayor parte de la luz.
+    return { hot: sprite(0.46, 0.5, "#ffffff"), mid: sprite(1.35, 0.28, "#56d9ff"), far: sprite(3.4, 0.09, "#2fa8e6"), horizon };
   }, []);
 
   useFrame(({ clock }) => {
@@ -191,15 +196,15 @@ function GlowCore({ anim, morph, config }: {
     const l = anim.live;
     const cfg = config.current;
     const bh = morph.currentShape === "blackhole" ? l.vortex : 0;
-    const g = (0.9 + Math.sin(t * l.pulseSpeed * 1.25) * 0.12 + l.energy * 0.18) * l.dim * cfg.glow;
+    const g = (0.85 + Math.sin(t * l.pulseSpeed * 1.25) * 0.1 + l.energy * 0.15) * l.dim * cfg.glow;
 
-    (hot.material as THREE.SpriteMaterial).opacity = 0.85 * g * (1 - bh * 0.8);
-    (mid.material as THREE.SpriteMaterial).opacity = 0.45 * g;
+    (hot.material as THREE.SpriteMaterial).opacity = 0.34 * g * (1 - bh * 0.8);
+    (mid.material as THREE.SpriteMaterial).opacity = 0.2 * g;
     (mid.material as THREE.SpriteMaterial).color.copy(l.color).lerp(new THREE.Color("#ffffff"), 0.25);
-    (far.material as THREE.SpriteMaterial).opacity = (0.13 + l.energy * 0.06) * l.dim;
+    (far.material as THREE.SpriteMaterial).opacity = (0.06 + l.energy * 0.04) * l.dim;
     (far.material as THREE.SpriteMaterial).color.copy(l.color);
-    hot.scale.setScalar((1.0 + Math.sin(t * l.pulseSpeed) * 0.08 + l.energy * 0.2) * (1 - bh * 0.45));
-    mid.scale.setScalar(2.7 + Math.sin(t * l.pulseSpeed * 0.8) * 0.2 + bh * 0.6);
+    hot.scale.setScalar((0.44 + Math.sin(t * l.pulseSpeed) * 0.04 + l.energy * 0.12) * (1 - bh * 0.45));
+    mid.scale.setScalar(1.3 + Math.sin(t * l.pulseSpeed * 0.8) * 0.12 + bh * 0.5);
 
     // horizonte de eventos: aparece solo en modo agujero negro
     (horizon.material as THREE.MeshBasicMaterial).opacity = bh * 0.96;

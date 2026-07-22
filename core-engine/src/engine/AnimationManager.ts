@@ -62,7 +62,8 @@ export class AnimationManager {
     l.pulseAmp += (cfg.pulseIntensity * st.pulseIntensity - l.pulseAmp) * k;
     l.noiseStrength += (cfg.noiseStrength * st.noiseStrength - l.noiseStrength) * k;
     l.speed += (cfg.particleSpeed * st.speed - l.speed) * k;
-    l.energy += (st.energy - l.energy) * k;
+    const energyTarget = Math.min(1, Math.max(0, st.energy + cfg.energyBias));
+    l.energy += (energyTarget - l.energy) * k;
     l.wave += (st.wave - l.wave) * k;
     l.expand += (st.expand - l.expand) * k;
     l.jitter += (st.jitter - l.jitter) * k;

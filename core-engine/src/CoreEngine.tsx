@@ -10,6 +10,7 @@ import { forwardRef, useCallback, useImperativeHandle, useRef, useState } from "
 import type { CoreConfig } from "./config/CoreConfig";
 import type { CoreStateName } from "./config/CoreState";
 import { ParticleSystem, type ParticleSystemHandle } from "./engine/ParticleSystem";
+import { PostFX } from "./engine/PostFX";
 import type { ShapeContext } from "./engine/ShapeRegistry";
 
 export interface CoreEngineHandle {
@@ -30,6 +31,8 @@ export const CoreEngine = forwardRef<CoreEngineHandle, Props>(function CoreEngin
   ref,
 ) {
   const system = useRef<ParticleSystemHandle>(null);
+  const configRef = useRef(config);
+  configRef.current = config;   // mismo objeto que muta la API pública en vivo
   const [dprMax, setDprMax] = useState(config.maxPixelRatio);
 
   // R3F monta la escena de forma asíncrona (una pestaña oculta puede
@@ -70,6 +73,7 @@ export const CoreEngine = forwardRef<CoreEngineHandle, Props>(function CoreEngin
       >
         <ParticleSystem ref={system} config={config} initialPositions={initialPositions} onReady={handleReady} />
       </PerformanceMonitor>
+      <PostFX config={configRef} />
     </Canvas>
   );
 });
