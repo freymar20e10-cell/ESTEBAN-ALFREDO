@@ -6,6 +6,7 @@
 import { sphere, cube, torus, ring, cylinder, cone } from "./shapes/basic";
 import { nebula, galaxy, dna, blackHole } from "./shapes/cosmic";
 import { atom, neuralnet, constellation, crystal } from "./shapes/science";
+import { heart, butterfly, lotus, jellyfish, saturn, tornado, peachBlossom } from "./shapes/organic";
 import { textShape, svgShape } from "./shapes/raster";
 import { modelShape } from "./shapes/model";
 
@@ -62,6 +63,13 @@ registerShape("atom", atom);
 registerShape("neuralnet", neuralnet);
 registerShape("constellation", constellation);
 registerShape("crystal", crystal);
+registerShape("heart", heart);
+registerShape("butterfly", butterfly);
+registerShape("lotus", lotus);
+registerShape("jellyfish", jellyfish);
+registerShape("saturn", saturn);
+registerShape("tornado", tornado);
+registerShape("peachblossom", peachBlossom);
 registerShape("text", (n, ctx) => textShape(n, ctx.radius, ctx.text ?? "JARVIS"));
 registerAsyncShape("svg", (n, ctx) => svgShape(n, ctx.radius, ctx.svg ?? ""));
 registerAsyncShape("model", (n, ctx) => modelShape(n, ctx.radius, ctx.url ?? ""));

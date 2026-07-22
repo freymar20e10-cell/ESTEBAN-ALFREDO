@@ -6,18 +6,32 @@
  */
 import type { ShapeGenerator } from "../ShapeRegistry";
 
-/** Nebulosa: centro denso brillante + halo disperso (la forma insignia de JARVIS). */
+/**
+ * Nebulosa — la forma insignia de JARVIS, calcada de la referencia:
+ * un CENTRO denso y brillante (una bola apretada de partículas) rodeado de
+ * un HALO de densidad media, y unas pocas partículas de ambiente muy lejos
+ * (como el campo de estrellas del fondo). El brillo del centro sale de la
+ * densidad, no de un foco — igual que en la imagen de referencia.
+ */
 export const nebula: ShapeGenerator = (n, { radius }) => {
   const p = new Float32Array(n * 3);
   for (let i = 0; i < n; i++) {
-    const inner = Math.random() < 0.58;
-    const r = inner
-      ? (0.05 + Math.pow(Math.random(), 2.6) * 0.55) * radius
-      : (0.42 + Math.pow(Math.random(), 1.6) * 1.25) * radius;
+    const q = Math.random();
+    let r: number;
+    if (q < 0.44) {
+      // núcleo interior: muy denso hacia el centro, compacto y brillante
+      r = Math.pow(Math.random(), 2.4) * radius * 0.62;
+    } else if (q < 0.96) {
+      // halo de densidad media: cáscara amplia, ligeramente más llena afuera
+      r = (0.82 + Math.pow(Math.random(), 0.85) * 1.7) * radius;
+    } else {
+      // ambiente disperso muy lejano (campo de estrellas del fondo)
+      r = (2.7 + Math.random() * 2.1) * radius;
+    }
     const th = Math.random() * Math.PI * 2;
     const ph = Math.acos(2 * Math.random() - 1);
     p[i * 3] = r * Math.sin(ph) * Math.cos(th);
-    p[i * 3 + 1] = r * Math.cos(ph) * 0.72;
+    p[i * 3 + 1] = r * Math.cos(ph) * 0.9;   // casi esférico, como la referencia
     p[i * 3 + 2] = r * Math.sin(ph) * Math.sin(th);
   }
   return p;

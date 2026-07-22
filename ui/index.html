@@ -544,10 +544,10 @@ function applyCoreState() {
   core.setState(target);
 }
 JarvisCoreEngine.mount($('core-canvas'), {
-  particleCount: (navigator.hardwareConcurrency || 4) <= 4 ? 7000 : 12000,
+  particleCount: (navigator.hardwareConcurrency || 4) <= 4 ? 9000 : 14000,
   shape: 'nebula',
-  color: '#42d6ff',
-  hotColor: '#fff2d6',     // ignición cálida — el reactor del Titán
+  color: '#2ae0d6',        // turquesa neón de la referencia
+  hotColor: '#dafff9',     // centro casi blanco (brilla por densidad, no por foco)
   glow: 0.95,
 }).then(handle => {
   core = handle;
@@ -849,11 +849,13 @@ const CC_TITLES = { mando: 'Centro de mando', nucleo: 'Núcleo', memoria: 'Memor
 // Formas del motor con nombre legible. Cambiar de forma cierra el panel
 // para que la transición se vea en pantalla completa.
 const CORE_SHAPES = [
-  ['nebula', 'Nebulosa'], ['sphere', 'Esfera'], ['cube', 'Cubo'],
-  ['torus', 'Toroide'], ['ring', 'Anillos'], ['cylinder', 'Cilindro'],
-  ['cone', 'Cono'], ['galaxy', 'Galaxia'], ['dna', 'ADN'],
-  ['blackhole', 'Agujero negro'], ['atom', 'Átomo'], ['neuralnet', 'Red neuronal'],
-  ['constellation', 'Constelación'], ['crystal', 'Cristal'],
+  ['nebula', 'Nebulosa'], ['heart', 'Corazón'], ['saturn', 'Saturno'],
+  ['lotus', 'Loto'], ['galaxy', 'Galaxia'], ['jellyfish', 'Medusa'],
+  ['torus', 'Toroide'], ['tornado', 'Tornado'], ['dna', 'Doble hélice'],
+  ['cube', 'Cubo'], ['butterfly', 'Mariposa'], ['peachblossom', 'Flor'],
+  ['sphere', 'Esfera'], ['ring', 'Anillos'], ['cylinder', 'Cilindro'],
+  ['cone', 'Cono'], ['blackhole', 'Agujero negro'], ['atom', 'Átomo'],
+  ['neuralnet', 'Red neuronal'], ['constellation', 'Constelación'], ['crystal', 'Cristal'],
 ];
 const CORE_TEXTS = ['JARVIS', 'ONLINE', 'HELLO', 'AI'];
 

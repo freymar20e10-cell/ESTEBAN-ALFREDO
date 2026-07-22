@@ -70,8 +70,8 @@ export const DEFAULT_CONFIG: CoreConfig = {
   opacity: 0.92,
   coreRadius: 2.1,
   transitionSpeed: 0.9,
-  color: "#3fd9ff",
-  hotColor: "#fff2d6",   // ignición cálida tipo reactor de Titán (ojo de BT-7274)
+  color: "#2ae0d6",      // turquesa neón de la referencia
+  hotColor: "#dafff9",   // centro casi blanco: la bola densa brilla por densidad
   shape: "nebula",
   idleAnimation: "breath",
   mouseInfluence: 0.35,
